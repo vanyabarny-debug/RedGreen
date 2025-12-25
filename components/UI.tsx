@@ -31,17 +31,16 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
   const finishedPlayers = players.filter(p => p.hasFinished);
   const totalAlive = activePlayers.length + finishedPlayers.length;
   
-  // Рассчет куша на одного человека
   const survivors = totalAlive;
   const potentialPrize = survivors > 0 ? Math.floor(state.pot / survivors) : 0;
   
   const [isPaying, setIsPaying] = useState(false);
+  const [loadingStars, setLoadingStars] = useState(false); // Состояние загрузки платежа
   const [showRotateWarning, setShowRotateWarning] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [editName, setEditName] = useState(userProfile.username);
 
-  // Orientation Check
   useEffect(() => {
     const checkOrientation = () => {
         const isPortrait = window.innerHeight > window.innerWidth;
@@ -58,9 +57,10 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
 
   const handlePayAndJoin = () => {
       if (userProfile.balance < GAME_CONFIG.ENTRY_FEE) {
-           alert("Недостаточно звезд! Пополните баланс.");
-           setShowProfile(true); 
-           return;
+            // @ts-ignore
+            window.Telegram?.WebApp?.showAlert("Недостаточно звезд! Пополните баланс в профиле.");
+            setShowProfile(true); 
+            return;
       }
       setIsPaying(true);
       playCashSound();
@@ -68,16 +68,44 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
       onUpdateProfile({ balance: userProfile.balance - GAME_CONFIG.ENTRY_FEE });
       
       setTimeout(() => {
-          onStart(); // Starts lobby sequence
+          onStart();
           setIsPaying(false);
       }, 800);
   };
 
-  const handleBuyStars = () => {
-      if (confirm("Это демо-режим. Симулировать успешную оплату 250 звезд?")) {
-          playCashSound();
-          onUpdateProfile({ balance: userProfile.balance + 250 });
-          alert("Успешно! +250 Звезд.");
+  // --- НОВАЯ ФУНКЦИЯ ОПЛАТЫ ЧЕРЕЗ API ---
+  const handleBuyStars = async () => {
+      const tg = (window as any).Telegram?.WebApp;
+      if (!tg) return;
+
+      setLoadingStars(true);
+      try {
+          // Вызываем твой новый API на Vercel
+          const response = await fetch('/api/create-invoice');
+          const data = await response.json();
+
+          if (data.ok && data.result) {
+              // Открываем нативное окно оплаты Telegram Stars
+              tg.openInvoice(data.result, (status: string) => {
+                  setLoadingStars(false);
+                  if (status === 'paid') {
+                      playCashSound();
+                      // Начисляем 100 звезд (как прописано в твоем API)
+                      onUpdateProfile({ balance: userProfile.balance + 100 });
+                      tg.showAlert("Успешно! 100 звезд зачислено.");
+                  } else if (status === 'cancelled') {
+                      tg.showScanQrPopup({ text: "Оплата отменена" }); // или просто ничего
+                      setTimeout(() => tg.closeScanQrPopup(), 1000);
+                  }
+              });
+          } else {
+              tg.showAlert("Ошибка сервера при создании счета.");
+              setLoadingStars(false);
+          }
+      } catch (error) {
+          console.error(error);
+          tg.showAlert("Произошла ошибка при связи с API.");
+          setLoadingStars(false);
       }
   };
 
@@ -104,7 +132,6 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
       onUpdateProfile({ avatarColor: random });
   }
   
-  // Force Start for testing (since no backend to start it)
   const handleForceStart = () => {
       // @ts-ignore
       import('../logic/GameServerEngine').then(mod => {
@@ -154,9 +181,11 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
                           </div>
                           <button 
                              onClick={handleBuyStars}
-                             className="text-xs bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded-lg text-white transition-colors flex items-center gap-1 font-bold"
+                             disabled={loadingStars}
+                             className="text-xs bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-600 px-3 py-1.5 rounded-lg text-white transition-colors flex items-center gap-1 font-bold"
                           >
-                              <Plus className="w-3 h-3" /> Пополнить
+                              {loadingStars ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />} 
+                              {loadingStars ? 'Ждем...' : 'Пополнить'}
                           </button>
                       </div>
                   </div>
@@ -172,7 +201,7 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
       </div>
   );
 
-  // --- WAITING ROOM (LOBBY FILLING) ---
+  // --- WAITING ROOM ---
   if (state.state === GameState.WAITING) {
       return (
         <div className="absolute inset-0 flex items-center justify-center bg-[#0f172a]/90 backdrop-blur-md z-50 p-4">
@@ -187,12 +216,11 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
                 </div>
 
                 <div className="flex-1 overflow-y-auto space-y-2 mb-4 scrollbar-hide">
-                    {/* List of joined players */}
                     {players.length === 0 && (
                         <div className="text-center text-gray-500 mt-10">Ожидание подключения игроков...</div>
                     )}
                     
-                    {players.slice().reverse().map((p, idx) => {
+                    {players.slice().reverse().map((p) => {
                         const isMe = p.id === playerId;
                         return (
                             <div 
@@ -228,7 +256,6 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
                          />
                      </div>
                      
-                     {/* Temporary Force Start for testing since there is no backend */}
                      <button 
                         onClick={handleForceStart}
                         className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl uppercase tracking-widest text-sm"
@@ -248,7 +275,6 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
         
         {showProfile && <ProfileModal />}
 
-        {/* Top Controls */}
         <div className="absolute top-4 right-4 flex gap-4 z-[60] items-center">
              <button 
                 onClick={() => setShowProfile(true)}
@@ -268,21 +294,11 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
             </button>
         </div>
 
-        {/* Rotate Warning Overlay */}
         {showRotateWarning && (
              <div className="fixed top-20 left-1/2 -translate-x-1/2 bg-yellow-500/90 text-black px-6 py-3 rounded-full shadow-lg z-[70] flex items-center gap-3 animate-pulse pointer-events-none whitespace-nowrap">
                  <Smartphone className="w-5 h-5 animate-[spin_2s_linear_infinite]" />
-                 <span className="font-bold text-sm">Поверни экран для удобства!</span>
+                 <span className="font-bold text-sm">Поверни экран!</span>
              </div>
-        )}
-
-        {/* Coin Animation */}
-        {isPaying && (
-            <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center">
-                 <div className="text-6xl animate-ping text-yellow-400 font-bold drop-shadow-lg flex items-center gap-2">
-                    -{GAME_CONFIG.ENTRY_FEE} <Star className="fill-current" />
-                 </div>
-            </div>
         )}
 
         <div className={`
@@ -351,7 +367,6 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
             <div className="relative z-10">
               <Trophy className="w-16 h-16 md:w-20 md:h-20 mx-auto text-yellow-400 mb-6 drop-shadow-[0_0_15px_rgba(250,204,21,0.6)]" />
               <h2 className="text-4xl md:text-6xl font-black text-white mb-2 tracking-tighter">ПОБЕДА</h2>
-              
               <div className="bg-gradient-to-b from-yellow-500/10 to-transparent p-4 md:p-6 rounded-2xl border border-yellow-500/20 mb-8">
                 <p className="text-xs text-yellow-200/50 uppercase tracking-widest mb-1">Ваш куш</p>
                 <div className="flex items-center justify-center gap-2">
@@ -364,7 +379,6 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
             <div className="relative z-10">
               <Skull className="w-16 h-16 md:w-20 md:h-20 mx-auto text-red-500 mb-6 drop-shadow-[0_0_20px_rgba(220,38,38,0.4)]" />
               <h2 className="text-4xl md:text-6xl font-black text-red-600 mb-2 tracking-tighter">ELIMINATED</h2>
-              
               <div className="bg-red-500/5 p-4 md:p-6 rounded-2xl border border-red-500/10 mb-8">
                   <div className="flex justify-between items-center px-4">
                       <span className="text-red-400/50 uppercase text-xs font-bold tracking-widest">Потеряно</span>
@@ -388,10 +402,9 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
     );
   }
 
-  // --- HUD (HEADS UP DISPLAY) ---
+  // --- HUD ---
   return (
     <div className="absolute inset-0 pointer-events-none">
-       {/* Fullscreen Toggle (In Game) */}
        <div className="absolute top-4 right-4 pointer-events-auto">
             <button 
                 onClick={toggleFullscreen}
@@ -401,10 +414,7 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
             </button>
        </div>
 
-      {/* Top Bar - STATS */}
       <div className="absolute top-0 left-0 right-0 p-3 md:p-6 flex flex-row justify-between items-start pointer-events-none">
-        
-        {/* Left: Total Bank and Prize per Person */}
         <div className="flex flex-col gap-2">
             <div className="bg-black/60 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/10 shadow-lg flex flex-col min-w-[120px]">
                 <span className="text-[10px] text-gray-400 uppercase font-bold tracking-widest mb-1">Общий Банк</span>
@@ -425,7 +435,6 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
             )}
         </div>
 
-        {/* Center: Traffic Light */}
         <div className={`
           absolute left-1/2 -translate-x-1/2 top-4 md:top-6
           px-6 py-2 md:px-12 md:py-3 rounded-full border border-white/10 backdrop-blur-md shadow-2xl transition-all duration-300
@@ -440,7 +449,6 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
           </h2>
         </div>
 
-        {/* Right: Survivors Stats */}
         <div className="bg-black/60 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/10 text-right shadow-lg min-w-[100px] mr-10 md:mr-12">
           <span className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">Выжившие</span>
           <div className="flex items-baseline justify-end gap-1 mt-1">
@@ -450,7 +458,6 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
         </div>
       </div>
       
-      {/* Danger Overlay */}
       {state.light === LightColor.RED && !state.players[playerId]?.isEliminated && (
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(220,38,38,0.15)_100%)] z-0 pointer-events-none animate-pulse" />
       )}
