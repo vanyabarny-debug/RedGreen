@@ -1,32 +1,30 @@
 export default async function handler(req, res) {
-  const token = process.env.BOT_TOKEN; // Убедись, что токен в Environment Variables на Vercel
-  
-  // Данные счета
-  const invoiceData = {
-    title: "100 Звезд",
-    description: "Пополнение баланса для игры Red Light Green Light",
-    payload: "stars_topup_100", // Твой внутренний ID транзакции
-    currency: "XTR", // Валюта для Telegram Stars
-    prices: [{ label: "100 Stars", amount: 100 }], // Для XTR amount = количеству звезд
-    provider_token: "" // Для звезд ВСЕГДА пусто
-  };
+  const token = process.env.BOT_TOKEN;
+
+  // Если токен забыли добавить в настройки Vercel
+  if (!token) {
+    return res.status(500).json({ ok: false, error: "BOT_TOKEN is missing in Vercel settings" });
+  }
 
   try {
     const response = await fetch(`https://api.telegram.org/bot${token}/createInvoiceLink`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(invoiceData),
+      body: JSON.stringify({
+        title: "100 Звезд",
+        description: "Пополнение баланса для игры",
+        payload: "user_123_payload",
+        currency: "XTR",
+        prices: [{ label: "100 Stars", amount: 100 }],
+        provider_token: "" 
+      })
     });
 
     const data = await response.json();
-
-    if (data.ok) {
-      return res.status(200).json(data);
-    } else {
-      console.error("Telegram API Error:", data);
-      return res.status(500).json({ ok: false, error: data.description });
-    }
+    
+    // Возвращаем ответ от Телеграма как есть, чтобы видеть ошибки
+    return res.status(200).json(data);
   } catch (error) {
-    return res.status(500).json({ ok: false, error: "Internal Server Error" });
+    return res.status(500).json({ ok: false, error: error.message });
   }
 }
