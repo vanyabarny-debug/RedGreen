@@ -1,0 +1,5 @@
+{
+  "name": "Red Light Green Light - WebGL",
+  "description": "Многопользовательская WebGL игра 'Тише едешь - дальше будешь' с симуляцией сервера, экономикой ставок и валидацией движений.",
+  "requestFramePermissions": []
+}
