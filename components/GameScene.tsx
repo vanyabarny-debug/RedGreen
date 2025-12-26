@@ -3,18 +3,14 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { PerspectiveCamera, Environment, Text, Sparkles, Stars, Instance, Instances, Billboard } from '@react-three/drei';
 import * as THREE from 'three';
 import { GameSchema, Player, LightColor, GAME_DEFAULTS, Obstacle } from '../types';
-import { Howl } from 'howler';
 
 interface SceneProps {
   gameState: GameSchema;
   playerId: string;
   onMove: (dx: number, dz: number) => void;
   controlsRef: React.MutableRefObject<{ up: boolean; down: boolean; left: boolean; right: boolean }>;
+  onLaser: () => void;
 }
-
-// Separate sound instance here to avoid passing from App (keep lightweight)
-// This will only be played if user has interacted
-const laserSound = new Howl({ src: ['https://assets.mixkit.co/active_storage/sfx/1666/1666-preview.mp3'], volume: 0.4 });
 
 const Forest = ({ fieldLength, fieldWidth }: { fieldLength: number, fieldWidth: number }) => {
     const trees = useMemo(() => {
@@ -48,7 +44,7 @@ const Forest = ({ fieldLength, fieldWidth }: { fieldLength: number, fieldWidth: 
     );
 };
 
-const LaserManager = ({ players, cannonZ }: { players: Record<string, Player>, cannonZ: number }) => {
+const LaserManager = ({ players, cannonZ, onLaser }: { players: Record<string, Player>, cannonZ: number, onLaser: () => void }) => {
     const [lasers, setLasers] = useState<{ id: string, target: THREE.Vector3 }[]>([]);
     const eliminatedIds = useRef<Set<string>>(new Set());
 
@@ -67,10 +63,7 @@ const LaserManager = ({ players, cannonZ }: { players: Record<string, Player>, c
         });
 
         if (hasNewEliminations) {
-            // Only play if global audio is unlocked (browser handles this policy usually)
-            if (Howler.ctx && Howler.ctx.state === 'running') {
-               laserSound.play();
-            }
+            onLaser(); // Trigger sound via prop safely
             setLasers(prev => [...prev, ...newLasers]);
         }
     });
@@ -237,7 +230,7 @@ const TrafficLight = ({ light, timeRemaining, z }: { light: LightColor, timeRema
     )
 }
 
-const GameContent = ({ gameState, playerId, onMove, controlsRef }: SceneProps) => {
+const GameContent = ({ gameState, playerId, onMove, controlsRef, onLaser }: SceneProps) => {
     const keysPressed = useRef<Set<string>>(new Set());
     const { size, camera } = useThree();
 
@@ -317,7 +310,7 @@ const GameContent = ({ gameState, playerId, onMove, controlsRef }: SceneProps) =
             
             <TrafficLight light={gameState.light} timeRemaining={gameState.timeRemaining} z={fieldLength + 5} />
 
-            <LaserManager players={gameState.players} cannonZ={fieldLength + 5} />
+            <LaserManager players={gameState.players} cannonZ={fieldLength + 5} onLaser={onLaser} />
 
             {gameState.obstacles.map(obs => (
                 <ObstacleMesh key={obs.id} obstacle={obs} />
