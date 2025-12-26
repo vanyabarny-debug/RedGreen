@@ -1,13 +1,66 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-    <meta charset="utf-8">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>Red Light Green Light</title>
+
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-</head>
-<body style="background: red; color: white; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
-    <h1>ЕСЛИ ТЫ ЭТО ВИДИШЬ — ВЕРСЕЛЬ РАБОТАЕТ</h1>
+    
     <script>
-        window.Telegram.WebApp.ready();
+        // Сразу говорим телеге, что мы тут, чтобы не было серого экрана
+        if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.ready();
+            window.Telegram.WebApp.expand();
+            window.Telegram.WebApp.backgroundColor = '#111111';
+        }
+    </script>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        body, html, #root { 
+            margin: 0; padding: 0; height: 100%; width: 100%;
+            overflow: hidden; background: #111; color: white; 
+            touch-action: none; 
+        }
+        /* Фикс для новых айфонов с вырезами */
+        #root { padding-bottom: env(safe-area-inset-bottom); }
+    </style>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@19.0.0",
+        "react-dom": "https://esm.sh/react-dom@19.0.0",
+        "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
+        "three": "https://esm.sh/three@0.170.0",
+        "@react-three/fiber": "https://esm.sh/@react-three/fiber@9.0.0",
+        "@react-three/drei": "https://esm.sh/@react-three/drei@9.100.0",
+        "lucide-react": "https://esm.sh/lucide-react@0.450.0",
+        "howler": "https://esm.sh/howler@2.2.4",
+        "@tonconnect/ui-react": "https://esm.sh/@tonconnect/ui-react@2.0.9",
+        "@tonconnect/sdk": "https://esm.sh/@tonconnect/sdk@3.0.0"
+      }
+    }
+    </script>
+
+    <link rel="stylesheet" href="/index.css">
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="module" src="/index.tsx"></script>
+
+    <script>
+        // Запасной план: если через 5 секунд всё еще пусто, выведем ошибку
+        setTimeout(() => {
+            if (!document.querySelector('canvas') && !document.querySelector('svg')) {
+                console.error("Приложение не загрузилось");
+                // Можно раскомментировать строку ниже для отладки прямо на экране:
+                // document.getElementById('root').innerHTML = '<div style="padding:20px">Ошибка загрузки модулей. Попробуйте перезагрузить.</div>';
+            }
+        }, 5000);
     </script>
 </body>
 </html>
