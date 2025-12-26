@@ -1,4 +1,16 @@
-import { GameSchema, GameState, LightColor, Player, Obstacle, GAME_DEFAULTS, RoomInfo, Difficulty, MapLength, RoomSettings } from '../types';
+import { 
+  GameSchema, 
+  GameState, 
+  LightColor, 
+  Player, 
+  Obstacle, 
+  GAME_DEFAULTS, 
+  RoomInfo, 
+  Difficulty, 
+  MapLength, 
+  RoomSettings,
+  CurrencyType 
+} from '../types';
 
 const networkChannel = new BroadcastChannel('game_channel');
 
@@ -45,6 +57,7 @@ export class GameServerEngine {
       players: {},
       obstacles: [],
       entryFee: GAME_DEFAULTS.ENTRY_FEE_COINS,
+      currency: 'COINS', // По умолчанию
       pot: 0,
       winners: [],
       winAmount: 0,
@@ -59,9 +72,7 @@ export class GameServerEngine {
 
   private generateObstacles(length: number, width: number, difficulty: Difficulty): Obstacle[] {
     const obstacles: Obstacle[] = [];
-    
-    // Настройки сложности
-    let sawDensity = 50; // Каждые 50 метров
+    let sawDensity = 50;
     let sawSpeedMultiplier = 1;
     let ballCount = 3;
 
@@ -75,17 +86,14 @@ export class GameServerEngine {
         ballCount = 5;
     }
 
-    // Генерация Пил
     const sawZPositions = [];
     for(let z = 40; z < length - 20; z += sawDensity) {
         sawZPositions.push(z);
     }
 
     sawZPositions.forEach((z) => {
-      // Рандомизация позиции Z, чтобы не было слишком линейно
       const actualZ = z + (Math.random() * 10 - 5);
       const count = Math.random() > 0.5 ? 2 : 1;
-      
       for (let i = 0; i < count; i++) {
         obstacles.push({
           id: `saw_${actualZ}_${i}`,
@@ -99,7 +107,6 @@ export class GameServerEngine {
       }
     });
 
-    // Генерация Шаров (Индиана Джонс)
     for(let i = 0; i < ballCount; i++) {
        obstacles.push({
           id: `ball_${i}`,
@@ -118,7 +125,8 @@ export class GameServerEngine {
 
   public createRoom(name: string, settings: RoomSettings, hostPlayer: Player) {
       const roomId = `room_${Date.now()}`;
-      
+      const fee = settings.currency === 'TON' ? GAME_DEFAULTS.ENTRY_FEE_TON : GAME_DEFAULTS.ENTRY_FEE_COINS;
+
       const newRoomInfo: RoomInfo = {
           id: roomId,
           name: name,
@@ -127,14 +135,18 @@ export class GameServerEngine {
           maxPlayers: settings.maxPlayers,
           difficulty: settings.difficulty,
           status: 'WAITING',
-          isTraining: settings.isTraining
+          isTraining: settings.isTraining,
+          entryFee: fee,
+          currency: settings.currency
       };
 
       this.isHost = true;
       this.state.roomId = roomId;
       this.state.state = GameState.LOBBY;
+      this.state.currency = settings.currency;
+      this.state.entryFee = fee;
+      this.state.pot = fee;
       
-      // Применяем настройки
       this.state.config = {
           fieldLength: settings.length,
           fieldWidth: 60,
@@ -143,20 +155,13 @@ export class GameServerEngine {
 
       this.state.obstacles = this.generateObstacles(settings.length, 60, settings.difficulty);
       this.state.players = { [hostPlayer.id]: { ...hostPlayer, isHost: true } };
-      
-      const fee = settings.isTraining ? GAME_DEFAULTS.ENTRY_FEE_COINS : GAME_DEFAULTS.ENTRY_FEE_TON;
-      this.state.entryFee = fee;
-      this.state.pot = fee;
-      
       this.state.winners = [];
 
       networkChannel.postMessage({ type: 'ROOM_CREATE', room: newRoomInfo });
-      
       this.broadcast();
   }
 
   public joinRoom(roomId: string, player: Player) {
-      // Проверка на клиенте, есть ли место
       const room = this.state.roomsList.find(r => r.id === roomId);
       if (room && room.playersCount >= room.maxPlayers) {
           alert("Комната заполнена!");
@@ -173,17 +178,14 @@ export class GameServerEngine {
 
   public leaveRoom() {
       if (!this.state.roomId) return;
-      
       const roomId = this.state.roomId;
       const playerId = this.myPlayerId;
 
-      // Локальный сброс
       this.state.roomId = null;
       this.state.state = GameState.MENU;
       this.state.players = {};
       this.isHost = false;
 
-      // Уведомляем сеть
       networkChannel.postMessage({ type: 'ROOM_LEAVE', roomId, playerId });
       this.broadcast();
   }
@@ -199,7 +201,6 @@ export class GameServerEngine {
     this.lastUpdate = Date.now();
     this.lastLightSwitchTime = Date.now() - 10000; 
     
-    // Обновляем статус комнаты в списке
     const roomIdx = this.state.roomsList.findIndex(r => r.id === this.state.roomId);
     if(roomIdx !== -1) {
         this.state.roomsList[roomIdx].status = 'PLAYING';
@@ -216,7 +217,6 @@ export class GameServerEngine {
     if (!this.isHost) {
         this.applyMove(playerId, dx, dz); 
         this.broadcast(); 
-        
         if (this.state.roomId) {
             networkChannel.postMessage({ type: 'PLAYER_MOVE', roomId: this.state.roomId, playerId, x: dx, z: dz });
         }
@@ -277,7 +277,6 @@ export class GameServerEngine {
     this.state.winners = [];
     this.state.pot = Object.keys(this.state.players).length * this.state.entryFee;
     
-    // Сброс статуса комнаты
     const roomIdx = this.state.roomsList.findIndex(r => r.id === this.state.roomId);
     if(roomIdx !== -1) {
         this.state.roomsList[roomIdx].status = 'WAITING';
@@ -286,8 +285,6 @@ export class GameServerEngine {
     this.broadcastNetwork({ type: 'GAME_RESET', roomId: this.state.roomId! });
     this.broadcast();
   }
-
-  // --- NETWORK HANDLING ---
 
   private handleNetworkMessage(msg: NetworkMessage) {
       switch(msg.type) {
@@ -302,11 +299,8 @@ export class GameServerEngine {
               if (this.isHost && this.state.roomId === msg.roomId) {
                   this.state.players[msg.player.id] = { ...msg.player, isHost: false };
                   this.state.pot += this.state.entryFee;
-                  
-                  // Обновляем счетчик в списке (локально у хоста, потом расшарится)
                   const r = this.state.roomsList.find(rm => rm.id === this.state.roomId);
                   if (r) r.playersCount++;
-
                   this.broadcast();
               }
               break;
@@ -319,9 +313,7 @@ export class GameServerEngine {
                   if (r) r.playersCount--;
                   this.broadcast();
               }
-              // Если это клиент, и комната, в которой он был, обновилась (например, ушли другие)
               if (!this.isHost && this.state.roomId !== msg.roomId) {
-                 // Обновление счетчиков в списке комнат
                  const r = this.state.roomsList.find(rm => rm.id === msg.roomId);
                  if (r && r.playersCount > 0) r.playersCount--;
                  this.broadcast();
@@ -337,10 +329,6 @@ export class GameServerEngine {
           case 'STATE_UPDATE':
               if (!this.isHost && this.state.roomId === msg.roomId) {
                   this.state = { ...this.state, ...msg.partialState };
-                  // Особое внимание конфигу, он должен синхронизироваться
-                  if (msg.partialState.config) {
-                      this.state.config = msg.partialState.config;
-                  }
                   this.broadcast();
               }
               break;
@@ -365,10 +353,8 @@ export class GameServerEngine {
       networkChannel.postMessage(msg);
   }
 
-  // --- HOST LOGIC ---
-
   private eliminatePlayer(playerId: string, reason: 'MOVEMENT' | 'OBSTACLE' = 'OBSTACLE') {
-    if (this.state.players[playerId].isEliminated) return;
+    if (!this.state.players[playerId] || this.state.players[playerId].isEliminated) return;
     this.state.players[playerId].isEliminated = true;
     this.state.players[playerId].deathReason = reason;
     this.broadcast();
@@ -379,7 +365,6 @@ export class GameServerEngine {
         this.eliminatePlayer(playerId, 'OBSTACLE'); 
         return;
     }
-
     this.state.players[playerId].hasFinished = true;
     this.state.players[playerId].z = this.state.config.fieldLength;
     this.state.players[playerId].finishTime = Date.now();
@@ -399,18 +384,13 @@ export class GameServerEngine {
 
   private update(dt: number) {
     if (this.state.state !== GameState.PLAYING) return;
-
     const now = Date.now();
     const delta = now - this.lastUpdate;
     this.lastUpdate = now;
-
     this.state.timeRemaining -= delta;
 
-    if (this.state.timeRemaining <= 0) {
-      this.switchLight();
-    }
+    if (this.state.timeRemaining <= 0) this.switchLight();
 
-    // Движение препятствий
     this.state.obstacles.forEach(obs => {
         if (obs.type === 'SAW') {
             obs.x += obs.speed * obs.direction * (delta / 1000) * 4;
@@ -428,11 +408,9 @@ export class GameServerEngine {
 
     Object.values(this.state.players).forEach(p => {
       if (p.isEliminated || p.hasFinished) return;
-
       for (const obs of this.state.obstacles) {
         const dist = Math.sqrt(Math.pow(p.x - obs.x, 2) + Math.pow(p.z - obs.z, 2));
         const hitRadius = obs.type === 'BALL' ? obs.radius - 0.5 : obs.radius + 0.4;
-        
         if (dist < hitRadius) {
             this.eliminatePlayer(p.id, 'OBSTACLE'); 
             break;
@@ -440,12 +418,8 @@ export class GameServerEngine {
       }
     });
 
-    const activePlayers = Object.values(this.state.players).filter(p => !p.isEliminated && !p.hasFinished);
     const allFinishedOrDead = Object.values(this.state.players).every(p => p.isEliminated || p.hasFinished);
-    
-    if (Object.keys(this.state.players).length > 0 && allFinishedOrDead) {
-      this.endGame();
-    }
+    if (Object.keys(this.state.players).length > 0 && allFinishedOrDead) this.endGame();
     
     if (this.isHost && this.state.roomId) {
         this.broadcastNetwork({ 
@@ -459,25 +433,20 @@ export class GameServerEngine {
                 state: this.state.state,
                 winners: this.state.winners,
                 winAmount: this.state.winAmount,
-                config: this.state.config, // Важно слать конфиг, чтобы клиенты знали длину карты
-                pot: this.state.pot // Include pot for clients
+                config: this.state.config,
+                pot: this.state.pot,
+                currency: this.state.currency
             }
         });
     }
-    
     this.broadcast();
   }
 
   private switchLight() {
     this.lastLightSwitchTime = Date.now();
-    // Хардкор: меньше времени на бег, быстрее светофор
     let greenTime = 3000;
     let redTime = 2500;
-    
-    if (this.state.config.difficulty === Difficulty.HARD) {
-        greenTime = 2000;
-        redTime = 2000;
-    }
+    if (this.state.config.difficulty === Difficulty.HARD) { greenTime = 2000; redTime = 2000; }
 
     if (this.state.light === LightColor.RED) {
       this.state.light = LightColor.GREEN;
@@ -491,20 +460,14 @@ export class GameServerEngine {
   private endGame() {
     this.state.state = GameState.FINISHED;
     const survivors = this.state.winners.length;
-    const winAmount = survivors > 0 
-        ? Math.floor(this.state.pot / survivors) 
-        : 0;
-    
-    this.state.winAmount = winAmount;
+    this.state.winAmount = survivors > 0 ? Math.floor(this.state.pot / survivors) : 0;
     this.stopGameLoop();
   }
 
   public subscribe(listener: (state: GameSchema) => void) {
     this.listeners.push(listener);
     listener(this.state);
-    return () => {
-      this.listeners = this.listeners.filter(l => l !== listener);
-    };
+    return () => { this.listeners = this.listeners.filter(l => l !== listener); };
   }
 
   private broadcast() {
