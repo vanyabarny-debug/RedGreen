@@ -1,11 +1,16 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import ReactDOM from 'react-dom/client';
+import { TonConnectUIProvider } from '@tonconnect/ui-react';
+import { Howl } from 'howler';
+
+// Импорты твоих внутренних компонентов (проверь, что пути совпадают)
 import { serverInstance } from './logic/GameServerEngine';
 import { GameScene } from './components/GameScene';
 import { UI } from './components/UI';
 import { Joystick } from './components/Joystick';
 import { GameSchema, GameState, LightColor, UserProfile, GAME_DEFAULTS } from './types';
-import { Howl } from 'howler';
 
+// --- НАСТРОЙКИ ЗВУКА ---
 const sounds = {
   greenLightMusic: new Howl({ 
     src: ['https://assets.mixkit.co/active_storage/sfx/995/995-preview.mp3'], 
@@ -23,10 +28,9 @@ const sounds = {
   cash: new Howl({ src: ['https://assets.mixkit.co/active_storage/sfx/2003/2003-preview.mp3'], volume: 1.0 })
 };
 
-// --- TELEGRAM INTEGRATION ---
+// --- ИНТЕГРАЦИЯ TELEGRAM ---
 const tg = (window as any).Telegram?.WebApp;
 const initData = tg?.initDataUnsafe?.user;
-
 const MY_PLAYER_ID = initData ? `tg_${initData.id}` : `player_${Math.floor(Math.random() * 1000)}`;
 
 if (tg) {
@@ -36,13 +40,12 @@ if (tg) {
         tg.disableVerticalSwipes();
     }
 }
-// ----------------------------
 
+// --- ОСНОВНОЙ КОМПОНЕНТ ПРИЛОЖЕНИЯ ---
 function App() {
   const [gameState, setGameState] = useState<GameSchema>(serverInstance.state);
   const [isClientEliminated, setIsClientEliminated] = useState(false);
   
-  // -- PROFILE SYSTEM --
   const [userProfile, setUserProfile] = useState<UserProfile>(() => {
       const saved = localStorage.getItem(`profile_${MY_PLAYER_ID}`);
       if (saved) return JSON.parse(saved);
@@ -51,7 +54,7 @@ function App() {
           id: MY_PLAYER_ID,
           username: initData?.username || (initData?.first_name ? `${initData.first_name}` : `Player ${MY_PLAYER_ID.slice(-4)}`),
           balance: GAME_DEFAULTS.INITIAL_BALANCE,
-          avatarColor: '#eab308' // Yellow default
+          avatarColor: '#eab308'
       };
   });
 
@@ -63,26 +66,16 @@ function App() {
   const handleUpdateProfile = (update: Partial<UserProfile>) => {
       setUserProfile(prev => ({ ...prev, ...update }));
   };
-  // --------------------
 
-  const controlsRef = useRef({
-      up: false,
-      down: false,
-      left: false,
-      right: false
-  });
-  
-  // Для джойстика (аналоговый ввод) - напрямую обновляет состояние в GameScene
+  const controlsRef = useRef({ up: false, down: false, left: false, right: false });
   const joystickMoveRef = useRef({ x: 0, y: 0 });
-
   const hasPlayedEndSound = useRef(false);
 
+  // Логика музыки (Зеленый свет)
   useEffect(() => {
     if (gameState.state === GameState.PLAYING && !isClientEliminated) {
       if (gameState.light === LightColor.GREEN) {
-        if (!sounds.greenLightMusic.playing()) {
-          sounds.greenLightMusic.play();
-        }
+        if (!sounds.greenLightMusic.playing()) sounds.greenLightMusic.play();
       } else {
         sounds.greenLightMusic.stop(); 
       }
@@ -91,12 +84,14 @@ function App() {
     }
   }, [gameState.light, gameState.state, isClientEliminated]);
 
+  // Звук тревоги (Красный свет)
   useEffect(() => {
     if (gameState.state === GameState.PLAYING && gameState.light === LightColor.RED && !isClientEliminated) {
         sounds.redLightAlert.play();
     }
   }, [gameState.light, gameState.state, isClientEliminated]);
 
+  // Подписка на изменения сервера
   useEffect(() => {
     const unsubscribe = serverInstance.subscribe((newState) => {
       setGameState(newState);
@@ -114,7 +109,6 @@ function App() {
         if (newState.winners.includes(MY_PLAYER_ID)) {
             sounds.win.play();
             if (tg) tg.HapticFeedback.notificationOccurred('success');
-            // Начисление выигрыша
             if (newState.winAmount > 0) {
                  handleUpdateProfile({ balance: userProfile.balance + newState.winAmount });
             }
@@ -136,16 +130,10 @@ function App() {
     if (tg) tg.HapticFeedback.impactOccurred('medium');
   };
 
-  const handlePlayCashSound = () => {
-    sounds.cash.play();
-  };
-
-  const handleReset = () => {
-    serverInstance.reset();
-  };
+  const handlePlayCashSound = () => sounds.cash.play();
+  const handleReset = () => serverInstance.reset();
 
   const handleMove = useCallback((dx: number, dz: number) => {
-    // В приоритете джойстик, если он активен
     if (joystickMoveRef.current.x !== 0 || joystickMoveRef.current.y !== 0) {
          serverInstance.playerMove(MY_PLAYER_ID, joystickMoveRef.current.x, joystickMoveRef.current.y);
     } else {
@@ -155,7 +143,6 @@ function App() {
   
   const handleJoystickMove = (x: number, y: number) => {
       joystickMoveRef.current = { x, y };
-      // Если джойстик двигается, сразу отправляем событие, так как useFrame может не успеть подхватить на слабых устройствах
       if (x !== 0 || y !== 0) {
           serverInstance.playerMove(MY_PLAYER_ID, x, y);
       }
@@ -163,7 +150,6 @@ function App() {
 
   return (
     <div className="w-full h-screen relative bg-[#0f172a] select-none overflow-hidden touch-none">
-      {/* 3D Сцена всегда рендерится, но скрыта менюшкой */}
       <GameScene 
         gameState={gameState} 
         playerId={MY_PLAYER_ID} 
@@ -181,11 +167,27 @@ function App() {
         onUpdateProfile={handleUpdateProfile}
       />
 
-      {/* Отображаем джойстик только в игре и если живы */}
       {gameState.state === GameState.PLAYING && !isClientEliminated && (
           <Joystick onMove={handleJoystickMove} />
       )}
     </div>
+  );
+}
+
+// --- ИНИЦИАЛИЗАЦИЯ (Рендеринг) ---
+
+// ТВОЯ КРИТИЧЕСКАЯ ССЫЛКА ТУТ:
+const MANIFEST_URL = 'https://red-green-gray.vercel.app/tonconnect-manifest.json';
+
+const rootElement = document.getElementById('root');
+if (rootElement) {
+  const root = ReactDOM.createRoot(rootElement);
+  root.render(
+    <React.StrictMode>
+      <TonConnectUIProvider manifestUrl={MANIFEST_URL}>
+        <App />
+      </TonConnectUIProvider>
+    </React.StrictMode>
   );
 }
 
