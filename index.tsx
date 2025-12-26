@@ -1,20 +1,26 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import { TonConnectUIProvider } from '@tonconnect/ui-react';
+import { TonConnectUIProvider, THEME } from '@tonconnect/ui-react';
 
 const rootElement = document.getElementById('root');
+
 if (!rootElement) {
-  throw new Error("Could not find root element to mount to");
+  throw new Error("Fatal: Root element not found. Check your index.html");
 }
 
-// Manifest URL required for TON Connect
-const MANIFEST_URL = 'https://red-green-gray.vercel.app/tonconnect-manifest.json';
+// Ссылка на твой будущий манифест (замени на свою при деплое)
+const MANIFEST_URL = 'https://your-game-domain.com/tonconnect-manifest.json';
 
 const root = ReactDOM.createRoot(rootElement);
+
 root.render(
   <React.StrictMode>
-    <TonConnectUIProvider manifestUrl={MANIFEST_URL}>
+    {/* Добавлена базовая кастомизация темы */}
+    <TonConnectUIProvider 
+      manifestUrl={MANIFEST_URL}
+      uiPreferences={{ theme: THEME.DARK }} 
+    >
       <App />
     </TonConnectUIProvider>
   </React.StrictMode>
