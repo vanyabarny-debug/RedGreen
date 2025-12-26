@@ -15,7 +15,7 @@ if (!rootElement) {
 }
 
 // 2. Используй лучше свой домен для манифеста, GitHub часто блочит новые Safari
-const MANIFEST_URL = 'https://raw.githubusercontent.com/ton-community/tutorials/main/03-client/test/public/tonconnect-manifest.json';
+const MANIFEST_URL = 'https://red-green-gray.vercel.app/tonconnect-manifest.json';
 
 const root = ReactDOM.createRoot(rootElement);
 
