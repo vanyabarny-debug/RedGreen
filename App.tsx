@@ -26,9 +26,17 @@ function App() {
   const [gameState, setGameState] = useState<GameSchema>(serverInstance.state);
   const [isClientEliminated, setIsClientEliminated] = useState(false);
   const [isTrainingMode, setIsTrainingMode] = useState(true);
+  const [audioInitialized, setAudioInitialized] = useState(false);
 
-  // Lazy load sounds to avoid iOS AudioContext crash on startup
-  const sounds = useMemo(() => ({
+  // -- AUDIO SYSTEM REFACTOR -- 
+  // We do NOT instantiate Howl immediately. iOS WebView will crash if AudioContext is created before user gesture.
+  const soundsRef = useRef<Record<string, Howl> | null>(null);
+
+  const initAudio = useCallback(() => {
+    if (soundsRef.current) return;
+    
+    // Create sounds only after user interaction
+    soundsRef.current = {
       greenLightMusic: new Howl({ 
         src: ['https://assets.mixkit.co/active_storage/sfx/995/995-preview.mp3'], 
         loop: true, 
@@ -46,7 +54,38 @@ function App() {
       win: new Howl({ src: ['https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3'], volume: 0.8 }), 
       lose: new Howl({ src: ['https://assets.mixkit.co/active_storage/sfx/2042/2042-preview.mp3'], volume: 0.8 }),
       cash: new Howl({ src: ['https://assets.mixkit.co/active_storage/sfx/2003/2003-preview.mp3'], volume: 1.0 })
-  }), []);
+    };
+    setAudioInitialized(true);
+  }, []);
+
+  const playSound = (key: string) => {
+      if (!soundsRef.current) return;
+      const sound = soundsRef.current[key];
+      if (sound && !sound.playing()) {
+          sound.play();
+      }
+  };
+
+  const stopSound = (key: string) => {
+      if (!soundsRef.current) return;
+      const sound = soundsRef.current[key];
+      if (sound) sound.stop();
+  };
+
+  // Initialize audio on first touch anywhere
+  useEffect(() => {
+      const handleTouch = () => {
+          initAudio();
+          window.removeEventListener('touchstart', handleTouch);
+          window.removeEventListener('click', handleTouch);
+      };
+      window.addEventListener('touchstart', handleTouch);
+      window.addEventListener('click', handleTouch);
+      return () => {
+          window.removeEventListener('touchstart', handleTouch);
+          window.removeEventListener('click', handleTouch);
+      }
+  }, [initAudio]);
 
   // -- PROFILE SYSTEM --
   const [userProfile, setUserProfile] = useState<UserProfile>(() => {
@@ -54,16 +93,13 @@ function App() {
       if (saved) {
           try {
             const parsed = JSON.parse(saved);
-            // Ensure gameHistory exists for legacy saves
             if (!parsed.gameHistory) parsed.gameHistory = [];
             return parsed;
           } catch(e) {
               console.error("Failed to parse profile", e);
           }
       }
-      
       const defaultLang: Language = (tg?.initDataUnsafe?.user?.language_code === 'ru') ? 'RU' : 'EN';
-
       return {
           id: MY_PLAYER_ID,
           username: initData?.username || `Player ${MY_PLAYER_ID.slice(-4)}`,
@@ -83,30 +119,30 @@ function App() {
   const handleUpdateProfile = (update: Partial<UserProfile>) => {
       setUserProfile(prev => ({ ...prev, ...update }));
   };
-  // --------------------
 
   const controlsRef = useRef({ up: false, down: false, left: false, right: false });
   const hasPlayedEndSound = useRef(false);
 
   // SOUND & HAPTIC LOGIC
   useEffect(() => {
+    if (!audioInitialized) return;
+
     if (gameState.state === GameState.PLAYING && !isClientEliminated) {
       if (gameState.light === LightColor.GREEN) {
-        if (!sounds.greenLightMusic.playing()) sounds.greenLightMusic.play();
-        sounds.siren.stop(); 
+        playSound('greenLightMusic');
+        stopSound('siren');
       } else {
-        sounds.greenLightMusic.stop(); 
-        if (!sounds.siren.playing()) sounds.siren.play();
-        if (!sounds.redLightAlert.playing()) sounds.redLightAlert.play();
-        
+        stopSound('greenLightMusic');
+        playSound('siren');
+        playSound('redLightAlert');
         if (tg) tg.HapticFeedback.notificationOccurred('warning');
       }
     } else {
-       sounds.greenLightMusic.stop();
-       sounds.siren.stop();
-       sounds.redLightAlert.stop();
+       stopSound('greenLightMusic');
+       stopSound('siren');
+       stopSound('redLightAlert');
     }
-  }, [gameState.light, gameState.state, isClientEliminated, sounds]);
+  }, [gameState.light, gameState.state, isClientEliminated, audioInitialized]);
 
   useEffect(() => {
     const unsubscribe = serverInstance.subscribe((newState) => {
@@ -115,31 +151,32 @@ function App() {
       // Handle Elimination
       if (newState.players[MY_PLAYER_ID]?.isEliminated && !isClientEliminated) {
         setIsClientEliminated(true);
-        sounds.greenLightMusic.stop(); 
-        sounds.siren.stop();
-        sounds.shot.play();
+        if (soundsRef.current) {
+            soundsRef.current.greenLightMusic?.stop();
+            soundsRef.current.siren?.stop();
+            soundsRef.current.shot?.play();
+        }
         if (tg) tg.HapticFeedback.notificationOccurred('error');
       }
 
       // Handle Game End (Win/Loss)
       if (newState.state === GameState.FINISHED && !hasPlayedEndSound.current) {
         hasPlayedEndSound.current = true;
-        sounds.greenLightMusic.stop();
-        sounds.siren.stop();
+        if (soundsRef.current) {
+            soundsRef.current.greenLightMusic?.stop();
+            soundsRef.current.siren?.stop();
+        }
         
         const isWinner = newState.winners.includes(MY_PLAYER_ID);
         const currency: 'TON' | 'COINS' = isTrainingMode ? 'COINS' : 'TON';
         const entryFee = newState.entryFee;
+        const winAmount = newState.winAmount;
         
-        let netAmount = 0;
-
         if (isWinner) {
-            sounds.win.play();
+            if (soundsRef.current) soundsRef.current.win?.play();
             if (tg) tg.HapticFeedback.notificationOccurred('success');
             
-            const winAmount = newState.winAmount;
-            netAmount = winAmount - entryFee; 
-
+            const netAmount = winAmount - entryFee; 
             const newItem: GameHistoryItem = {
                 timestamp: Date.now(),
                 outcome: 'WIN',
@@ -148,7 +185,7 @@ function App() {
             };
 
             const currentHistory = userProfile.gameHistory || [];
-
+            
             if (isTrainingMode) {
                handleUpdateProfile({ 
                    coins: userProfile.coins + winAmount, 
@@ -161,18 +198,15 @@ function App() {
                });
             }
         } else {
-            sounds.lose.play();
-            netAmount = -entryFee;
-            
+            if (soundsRef.current) soundsRef.current.lose?.play();
+            const netAmount = -entryFee;
             const newItem: GameHistoryItem = {
                 timestamp: Date.now(),
                 outcome: 'LOSS',
                 amount: netAmount,
                 currency: currency
             };
-            
             const currentHistory = userProfile.gameHistory || [];
-
             handleUpdateProfile({ 
                 gameHistory: [...currentHistory, newItem].slice(-30)
             });
@@ -186,18 +220,22 @@ function App() {
       }
     });
     return unsubscribe;
-  }, [isClientEliminated, isTrainingMode, userProfile, sounds]);
+  }, [isClientEliminated, isTrainingMode, userProfile, audioInitialized]);
 
   const handleJoystickMove = (x: number, y: number) => {
       serverInstance.playerMove(MY_PLAYER_ID, x, y);
   };
 
   return (
-    <div className="w-full h-screen relative bg-[#0f172a] select-none overflow-hidden touch-none">
+    <div className="w-full h-screen relative bg-[#0f172a] select-none overflow-hidden touch-none" onClick={initAudio}>
       <GameScene 
         gameState={gameState} 
         playerId={MY_PLAYER_ID} 
-        onMove={(x, z) => serverInstance.playerMove(MY_PLAYER_ID, x, z)} 
+        onMove={(x, z) => {
+             // Init audio on movement attempt if not already done
+             if (!audioInitialized) initAudio();
+             serverInstance.playerMove(MY_PLAYER_ID, x, z);
+        }} 
         controlsRef={controlsRef}
       />
 
@@ -207,9 +245,15 @@ function App() {
         userProfile={userProfile}
         isTrainingMode={isTrainingMode}
         onToggleMode={() => setIsTrainingMode(!isTrainingMode)}
-        onStart={() => serverInstance.startGame()}
+        onStart={() => {
+            initAudio();
+            serverInstance.startGame();
+        }}
         onReset={() => serverInstance.reset()}
-        playCashSound={() => sounds.cash.play()}
+        playCashSound={() => {
+            initAudio();
+            if (soundsRef.current) soundsRef.current.cash?.play();
+        }}
         onUpdateProfile={handleUpdateProfile}
       />
 
