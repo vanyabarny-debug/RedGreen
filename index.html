@@ -1,66 +1,33 @@
 <!DOCTYPE html>
 <html lang="ru">
-<head>
+  <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <title>Red Light Green Light</title>
-
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    
-    <script>
-        // Сразу говорим телеге, что мы тут, чтобы не было серого экрана
-        if (window.Telegram && window.Telegram.WebApp) {
-            window.Telegram.WebApp.ready();
-            window.Telegram.WebApp.expand();
-            window.Telegram.WebApp.backgroundColor = '#111111';
-        }
-    </script>
-
     <script src="https://cdn.tailwindcss.com"></script>
-
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        body, html, #root { 
-            margin: 0; padding: 0; height: 100%; width: 100%;
-            overflow: hidden; background: #111; color: white; 
-            touch-action: none; 
-        }
-        /* Фикс для новых айфонов с вырезами */
-        #root { padding-bottom: env(safe-area-inset-bottom); }
+      body, html, #root { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; background: #0f172a; color: white; touch-action: none; }
     </style>
-
-<script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@19.0.0",
-    "react-dom": "https://esm.sh/react-dom@19.0.0",
-    "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
-    "three": "https://esm.sh/three@0.170.0",
-    "@react-three/fiber": "https://esm.sh/@react-three/fiber@9.0.0",
-    "@react-three/drei": "https://esm.sh/@react-three/drei@9.102.0",
-    "lucide-react": "https://esm.sh/lucide-react@0.450.0",
-    "howler": "https://esm.sh/howler@2.2.4",
-    "@tonconnect/ui-react": "https://esm.sh/@tonconnect/ui-react@2.0.9",
-    "@tonconnect/sdk": "https://esm.sh/@tonconnect/sdk@3.0.0"
-  }
-}
-</script>
-
-    <link rel="stylesheet" href="/index.css">
-</head>
-<body>
-    <div id="root"></div>
-    
-    <script type="module" src="/index.tsx"></script>
-
-    <script>
-        // Запасной план: если через 5 секунд всё еще пусто, выведем ошибку
-        setTimeout(() => {
-            if (!document.querySelector('canvas') && !document.querySelector('svg')) {
-                console.error("Приложение не загрузилось");
-                // Можно раскомментировать строку ниже для отладки прямо на экране:
-                // document.getElementById('root').innerHTML = '<div style="padding:20px">Ошибка загрузки модулей. Попробуйте перезагрузить.</div>';
-            }
-        }, 5000);
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@19.2.3",
+        "react-dom": "https://esm.sh/react-dom@19.2.3",
+        "react-dom/client": "https://esm.sh/react-dom@19.2.3/client",
+        "three": "https://esm.sh/three@0.182.0",
+        "@react-three/fiber": "https://esm.sh/@react-three/fiber@9.0.0?external=react,react-dom,three",
+        "@react-three/drei": "https://esm.sh/@react-three/drei@10.7.7?external=react,react-dom,three,@react-three/fiber",
+        "lucide-react": "https://esm.sh/lucide-react@0.450.0?external=react",
+        "howler": "https://esm.sh/howler@2.2.4",
+        "@tonconnect/ui-react": "https://esm.sh/@tonconnect/ui-react@2.0.9?external=react,react-dom",
+        "@tonconnect/sdk": "https://esm.sh/@tonconnect/sdk@3.0.0"
+      }
+    }
     </script>
-</body>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./index.tsx"></script>
+  </body>
 </html>
