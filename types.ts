@@ -22,12 +22,24 @@ export enum MapLength {
   LONG = 400
 }
 
+export type Language = 'RU' | 'EN';
+
+export interface GameHistoryItem {
+  timestamp: number;
+  outcome: 'WIN' | 'LOSS';
+  amount: number; // Net amount (e.g. +200 or -100)
+  currency: 'TON' | 'COINS';
+}
+
 export interface UserProfile {
   id: string;
   username: string;
-  balance: number;
+  tonBalance: number; // Real TON Balance
+  coins: number;      // Virtual Currency
   walletAddress?: string;
   avatarColor: string;
+  language: Language;
+  gameHistory: GameHistoryItem[];
 }
 
 export interface Friend {
@@ -35,7 +47,7 @@ export interface Friend {
   username: string;
   avatarColor: string;
   status: 'ONLINE' | 'OFFLINE' | 'IN_GAME';
-  currentRoomId?: string; // Если друг в игре, знаем ID комнаты
+  currentRoomId?: string; 
 }
 
 export interface Player {
@@ -66,6 +78,7 @@ export interface RoomSettings {
   difficulty: Difficulty;
   length: MapLength;
   maxPlayers: number;
+  isTraining: boolean; 
 }
 
 export interface RoomInfo {
@@ -74,8 +87,9 @@ export interface RoomInfo {
   hostId: string;
   playersCount: number;
   maxPlayers: number;
-  difficulty: Difficulty; // Для отображения в списке
+  difficulty: Difficulty;
   status: 'WAITING' | 'PLAYING';
+  isTraining: boolean;
 }
 
 export interface DynamicGameConfig {
@@ -96,14 +110,15 @@ export interface GameSchema {
   winners: string[];
   winAmount: number;
   roomsList: RoomInfo[];
-  config: DynamicGameConfig; // Текущая конфигурация активной игры
+  config: DynamicGameConfig;
 }
 
 export const GAME_DEFAULTS = {
   PLAYER_SPEED: 0.35, 
   TICK_RATE: 60,
-  ENTRY_FEE: 1.0, 
-  INITIAL_BALANCE: 5.0, 
+  ENTRY_FEE_TON: 1.0, 
+  ENTRY_FEE_COINS: 100,
+  INITIAL_COINS: 1000, 
   MAX_WINNERS: 20,
   ZONE_TOLERANCE: 0.5,
 };
