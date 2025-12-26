@@ -9,8 +9,8 @@ export const Joystick: React.FC<JoystickProps> = ({ onMove }) => {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [origin, setOrigin] = useState({ x: 0, y: 0 });
   
-  // Increased radius for better precision on mobile
-  const joystickRadius = 60; 
+  // Reduced radius for less screen obstruction
+  const joystickRadius = 45; 
 
   const handleStart = (clientX: number, clientY: number) => {
     setActive(true);
@@ -40,14 +40,11 @@ export const Joystick: React.FC<JoystickProps> = ({ onMove }) => {
     setPosition({ x: normalizedX, y: normalizedY });
 
     // OUTPUT CALCULATION
-    // X: Left (-1) to Right (1) -> Standard
-    // Y: Down (1) to Up (-1) on screen -> needs to be inverted for 3D Forward (Positive Z)
     
-    const xInput = normalizedX / joystickRadius;
+    // X: Inverted to match visual camera orientation (Right drag = Right move)
+    const xInput = -(normalizedX / joystickRadius);
     
-    // IMPORTANT: In our game, Forward is Positive Z.
-    // Dragging UP (negative pixel dy) should produce Positive Z.
-    // Dragging DOWN (positive pixel dy) should produce Negative Z.
+    // Y: Dragging UP (negative pixels) = Forward (+Z in 3D space)
     const yInput = -(normalizedY / joystickRadius); 
 
     onMove(xInput, yInput);
@@ -60,10 +57,10 @@ export const Joystick: React.FC<JoystickProps> = ({ onMove }) => {
   };
 
   return (
-    <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-50 select-none touch-none">
-        {/* Joystick Zone */}
+    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50 select-none touch-none">
+        {/* Joystick Zone - Reduced size */}
         <div 
-            className="relative w-40 h-40 rounded-full bg-white/5 backdrop-blur-sm border-2 border-white/10 shadow-2xl flex items-center justify-center"
+            className="relative w-32 h-32 rounded-full bg-white/5 backdrop-blur-[2px] border border-white/10 shadow-xl flex items-center justify-center"
             onTouchStart={(e) => handleStart(e.touches[0].clientX, e.touches[0].clientY)}
             onTouchMove={(e) => handleMove(e.touches[0].clientX, e.touches[0].clientY)}
             onTouchEnd={handleEnd}
@@ -74,21 +71,21 @@ export const Joystick: React.FC<JoystickProps> = ({ onMove }) => {
             onMouseLeave={handleEnd}
         >
             {/* Center Decor */}
-            <div className="absolute w-2 h-2 bg-white/20 rounded-full" />
+            <div className="absolute w-1 h-1 bg-white/30 rounded-full" />
 
-            {/* Stick */}
+            {/* Stick - Reduced size */}
             <div 
-                className={`absolute w-16 h-16 rounded-full shadow-lg transition-transform duration-75 
-                ${active ? 'bg-emerald-500 scale-90' : 'bg-white/20 scale-100'}`}
+                className={`absolute w-12 h-12 rounded-full shadow-lg transition-transform duration-75 border border-white/20
+                ${active ? 'bg-emerald-500/80 scale-90' : 'bg-white/10 scale-100'}`}
                 style={{
                     transform: `translate(${position.x}px, ${position.y}px)`
                 }}
             >
-                <div className="w-full h-full rounded-full bg-gradient-to-br from-white/40 to-transparent" />
+                <div className="w-full h-full rounded-full bg-gradient-to-br from-white/30 to-transparent" />
             </div>
         </div>
-        <div className="text-center mt-4 text-[10px] text-white/40 font-bold uppercase tracking-widest">
-            ДЖОЙСТИК
+        <div className="text-center mt-2 text-[8px] text-white/30 font-bold uppercase tracking-widest pointer-events-none">
+            MOVE
         </div>
     </div>
   );
