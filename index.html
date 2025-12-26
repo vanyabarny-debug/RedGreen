@@ -10,21 +10,25 @@
       body, html, #root { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; background: #0f172a; color: white; touch-action: none; }
     </style>
     <script type="importmap">
-    {
-      "imports": {
-        "react": "https://esm.sh/react@19.2.3",
-        "react-dom": "https://esm.sh/react-dom@19.2.3",
-        "react-dom/client": "https://esm.sh/react-dom@19.2.3/client",
-        "three": "https://esm.sh/three@0.182.0",
-        "@react-three/fiber": "https://esm.sh/@react-three/fiber@9.0.0?external=react,react-dom,three",
-        "@react-three/drei": "https://esm.sh/@react-three/drei@10.7.7?external=react,react-dom,three,@react-three/fiber",
-        "lucide-react": "https://esm.sh/lucide-react@0.450.0?external=react",
-        "howler": "https://esm.sh/howler@2.2.4",
-        "@tonconnect/ui-react": "https://esm.sh/@tonconnect/ui-react@2.0.9?external=react,react-dom",
-        "@tonconnect/sdk": "https://esm.sh/@tonconnect/sdk@3.0.0"
-      }
+{
+  "imports": {
+    "react": "https://ga.jspm.io/npm:react@18.3.1/index.js",
+    "react-dom": "https://ga.jspm.io/npm:react-dom@18.3.1/index.js",
+    "react-dom/client": "https://ga.jspm.io/npm:react-dom@18.3.1/client.js",
+    "three": "https://ga.jspm.io/npm:three@0.170.0/build/three.module.js",
+    "@react-three/fiber": "https://ga.jspm.io/npm:@react-three/fiber@8.17.10/dist/react-three-fiber.esm.js",
+    "@react-three/drei": "https://ga.jspm.io/npm:@react-three/drei@9.114.0/dist/index.js",
+    "howler": "https://ga.jspm.io/npm:howler@2.2.4/dist/howler.js",
+    "lucide-react": "https://ga.jspm.io/npm:lucide-react@0.450.0/dist/esm/lucide-react.js",
+    "@tonconnect/ui-react": "https://ga.jspm.io/npm:@tonconnect/ui-react@2.0.9/dist/index.js"
+  },
+  "scopes": {
+    "https://ga.jspm.io/": {
+      "scheduler": "https://ga.jspm.io/npm:scheduler@0.23.2/index.js"
     }
-    </script>
+  }
+}
+</script>
   </head>
   <body>
     <div id="root"></div>
