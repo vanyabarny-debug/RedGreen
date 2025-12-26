@@ -1,9 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { GameSchema, GameState, LightColor, GAME_DEFAULTS, Player, UserProfile, Difficulty, MapLength, RoomSettings, Friend } from '../types';
-import { Users, Trophy, Skull, Play, Smartphone, Maximize2, Minimize2, Settings, User, Star, Plus, Loader2, Wallet, ArrowDownCircle, ArrowUpCircle, X, Shield, Swords, Ruler, Clock, HeartHandshake, LogOut, Send } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { 
+    GameSchema, GameState, LightColor, GAME_DEFAULTS, Player, 
+    UserProfile, Difficulty, MapLength, RoomSettings, Friend 
+} from '../types';
+import { 
+    Users, Trophy, Skull, Play, Smartphone, Maximize2, Minimize2, 
+    Settings, User, Star, Plus, Loader2, Wallet, ArrowDownCircle, 
+    ArrowUpCircle, X, Shield, Swords, Ruler, Clock, HeartHandshake, 
+    LogOut, Send 
+} from 'lucide-react';
 import { serverInstance } from '../logic/GameServerEngine';
 import { TonConnectButton, useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 
+// Адрес вашего горячего кошелька для приема платежей
 const ADMIN_WALLET_ADDRESS = "0QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC"; 
 
 // MOCK FRIENDS DATA
@@ -45,10 +54,6 @@ const TonIcon = ({ className }: { className?: string }) => (
 
 export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, onReset, playCashSound, onUpdateProfile }) => {
   const players = Object.values(state.players) as Player[];
-  const activePlayers = players.filter(p => !p.isEliminated && !p.hasFinished);
-  const finishedPlayers = players.filter(p => p.hasFinished);
-  const totalAlive = activePlayers.length + finishedPlayers.length;
-  
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -57,7 +62,7 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [activeTab, setActiveTab] = useState<'ROOMS' | 'FRIENDS'>('ROOMS');
 
-  // Create Room State
+  // Создание комнаты - стейт
   const [newRoomName, setNewRoomName] = useState(`Игра ${userProfile.username}`);
   const [newRoomDifficulty, setNewRoomDifficulty] = useState<Difficulty>(Difficulty.MEDIUM);
   const [newRoomLength, setNewRoomLength] = useState<MapLength>(MapLength.MEDIUM);
@@ -66,13 +71,30 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
   const [tonConnectUI] = useTonConnectUI();
   const wallet = useTonWallet();
 
+  // СИНХРОНИЗАЦИЯ С БАЗОЙ ДАННЫХ SUPABASE
+  const syncWithDatabase = useCallback(async (address: string) => {
+    try {
+        // Предполагаем, что tgId берется из Telegram WebApp
+        const tgId = (window as any).Telegram?.WebApp?.initDataUnsafe?.user?.id || 123456;
+        const response = await fetch(`/api/get-user?tgId=${tgId}&wallet=${address}`);
+        const data = await response.json();
+        
+        if (data.internal_balance !== undefined) {
+            onUpdateProfile({ 
+                balance: data.internal_balance,
+                walletAddress: address
+            });
+        }
+    } catch (e) {
+        console.error("Ошибка синхронизации с БД:", e);
+    }
+  }, [onUpdateProfile]);
+
   useEffect(() => {
-      if (wallet && wallet.account.address !== userProfile.walletAddress) {
-          onUpdateProfile({ walletAddress: wallet.account.address });
-      } else if (!wallet && userProfile.walletAddress) {
-          onUpdateProfile({ walletAddress: undefined });
+      if (wallet?.account?.address) {
+          syncWithDatabase(wallet.account.address);
       }
-  }, [wallet]);
+  }, [wallet, syncWithDatabase]);
 
   const handleCreateRoom = () => {
       if (userProfile.balance < GAME_DEFAULTS.ENTRY_FEE) {
@@ -125,7 +147,6 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
 
       onUpdateProfile({ balance: userProfile.balance - GAME_DEFAULTS.ENTRY_FEE });
       playCashSound();
-
       serverInstance.joinRoom(roomId, player);
   };
 
@@ -135,50 +156,81 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
 
   const handleDeposit = async () => {
       if (!wallet) {
-          alert("Сначала подключите кошелек!");
+          tonConnectUI.connectWallet();
           return;
       }
+
       setIsProcessing(true);
+      const amountInNanotons = "1000000000"; // 1 TON
+
       const transaction = {
-          validUntil: Math.floor(Date.now() / 1000) + 60, 
+          validUntil: Math.floor(Date.now() / 1000) + 360, 
           messages: [
               {
                   address: ADMIN_WALLET_ADDRESS,
-                  amount: "1000000000", 
+                  amount: amountInNanotons, 
               }
           ]
       };
+
       try {
           const result = await tonConnectUI.sendTransaction(transaction);
-          playCashSound();
-          onUpdateProfile({ balance: userProfile.balance + 1.0 });
-          alert("Депозит успешен! +1.0 TON на игровой счет.");
+          
+          // Отправляем hash на бэкенд для проверки и начисления
+          const verifyRes = await fetch('/api/deposit', {
+              method: 'POST',
+              body: JSON.stringify({ 
+                  hash: result.boc, // В реальном TON Connect здесь будет boc
+                  tgId: (window as any).Telegram?.WebApp?.initDataUnsafe?.user?.id || 123456 
+              })
+          });
+
+          if (verifyRes.ok) {
+              playCashSound();
+              // Обновляем локально, пока база обновляется
+              onUpdateProfile({ balance: userProfile.balance + 1.0 });
+              alert("Депозит успешен! +1.0 TON на игровой счет.");
+          }
       } catch (e) {
           console.error(e);
-          alert("Ошибка или отмена транзакции.");
+          alert("Ошибка транзакции.");
       } finally {
           setIsProcessing(false);
       }
   };
 
-  const handleWithdraw = () => {
+  const handleWithdraw = async () => {
       const amount = parseFloat(withdrawAmount);
       if (isNaN(amount) || amount <= 0) {
-          alert("Введите корректную сумму");
+          alert("Введите сумму");
           return;
       }
       if (amount > userProfile.balance) {
-          alert("Недостаточно средств на игровом балансе");
+          alert("Недостаточно средств");
           return;
       }
+
       setIsProcessing(true);
-      setTimeout(() => {
-          onUpdateProfile({ balance: userProfile.balance - amount });
-          playCashSound();
-          alert(`Запрос на вывод ${amount} TON принят!`);
-          setWithdrawAmount('');
+      try {
+          const tgId = (window as any).Telegram?.WebApp?.initDataUnsafe?.user?.id || 123456;
+          const res = await fetch('/api/withdraw', {
+              method: 'POST',
+              body: JSON.stringify({ tgId, amount, address: wallet?.account.address })
+          });
+
+          if (res.ok) {
+              onUpdateProfile({ balance: userProfile.balance - amount });
+              playCashSound();
+              alert(`Запрос на вывод ${amount} TON отправлен!`);
+              setWithdrawAmount('');
+          } else {
+              alert("Ошибка при выводе. Попробуйте позже.");
+          }
+      } catch (e) {
+          alert("Ошибка сети.");
+      } finally {
           setIsProcessing(false);
-      }, 1500);
+      }
   };
 
   const toggleFullscreen = () => {
@@ -186,10 +238,8 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
           document.documentElement.requestFullscreen();
           setIsFullscreen(true);
       } else {
-          if (document.exitFullscreen) {
-              document.exitFullscreen();
-              setIsFullscreen(false);
-          }
+          document.exitFullscreen();
+          setIsFullscreen(false);
       }
   };
 
@@ -204,7 +254,7 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
       onUpdateProfile({ avatarColor: random });
   }
 
-  // --- ROOMS MENU ---
+  // --- МЕНЮ КОМНАТ ---
   if (state.state === GameState.MENU) {
       return (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0f172a]/90 backdrop-blur-md z-50 p-4">
@@ -233,12 +283,13 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
                                   <span className="text-3xl font-mono text-white font-bold">{userProfile.balance.toFixed(2)}</span>
                               </div>
                               <div className="grid grid-cols-2 gap-3">
-                                  <button onClick={handleDeposit} disabled={isProcessing || !wallet} className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white py-2 rounded-lg text-sm font-bold flex flex-col items-center gap-1">
-                                      {isProcessing ? <Loader2 className="w-4 h-4 animate-spin"/> : <ArrowDownCircle className="w-4 h-4" />} Депозит 1 TON
+                                  <button onClick={handleDeposit} disabled={isProcessing} className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white py-2 rounded-lg text-sm font-bold flex flex-col items-center gap-1">
+                                      {isProcessing ? <Loader2 className="w-4 h-4 animate-spin"/> : <ArrowDownCircle className="w-4 h-4" />} 
+                                      {wallet ? "Депозит 1 TON" : "Подключить"}
                                   </button>
                                   <div className="flex flex-col gap-2">
-                                      <input type="number" placeholder="Сумма" value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} className="bg-black/50 border border-white/10 rounded-lg px-2 py-1 text-white text-xs w-full" />
-                                      <button onClick={handleWithdraw} disabled={isProcessing} className="bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white py-1 rounded-lg text-xs font-bold flex items-center justify-center gap-1">
+                                      <input type="number" placeholder="0.0" value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} className="bg-black/50 border border-white/10 rounded-lg px-2 py-1 text-white text-xs w-full" />
+                                      <button onClick={handleWithdraw} disabled={isProcessing || !wallet} className="bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white py-1 rounded-lg text-xs font-bold flex items-center justify-center gap-1">
                                           <ArrowUpCircle className="w-3 h-3" /> Вывод
                                       </button>
                                   </div>
@@ -277,11 +328,7 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
                              <div className="grid grid-cols-2 gap-4">
                                  <div>
                                      <label className="text-xs text-gray-400 uppercase font-bold mb-1 ml-1">Сложность</label>
-                                     <select 
-                                        value={newRoomDifficulty} 
-                                        onChange={e => setNewRoomDifficulty(e.target.value as Difficulty)}
-                                        className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/10 outline-none appearance-none"
-                                     >
+                                     <select value={newRoomDifficulty} onChange={e => setNewRoomDifficulty(e.target.value as Difficulty)} className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/10 outline-none appearance-none">
                                          <option value={Difficulty.EASY}>Легко</option>
                                          <option value={Difficulty.MEDIUM}>Средне</option>
                                          <option value={Difficulty.HARD}>Хардкор</option>
@@ -289,11 +336,7 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
                                  </div>
                                  <div>
                                      <label className="text-xs text-gray-400 uppercase font-bold mb-1 ml-1">Длина</label>
-                                     <select 
-                                        value={newRoomLength} 
-                                        onChange={e => setNewRoomLength(parseInt(e.target.value) as MapLength)}
-                                        className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/10 outline-none appearance-none"
-                                     >
+                                     <select value={newRoomLength} onChange={e => setNewRoomLength(parseInt(e.target.value) as MapLength)} className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/10 outline-none appearance-none">
                                          <option value={MapLength.SHORT}>Короткая</option>
                                          <option value={MapLength.MEDIUM}>Средняя</option>
                                          <option value={MapLength.LONG}>Марафон</option>
@@ -303,11 +346,11 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
 
                              <div className="pt-4 border-t border-white/10 mt-4">
                                  <div className="flex justify-between text-sm mb-4">
-                                     <span className="text-gray-400">Стоимость создания:</span>
+                                     <span className="text-gray-400">Взнос за игру:</span>
                                      <span className="text-[#0098EA] font-bold">{GAME_DEFAULTS.ENTRY_FEE} TON</span>
                                  </div>
-                                 <button onClick={handleCreateRoom} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-900/20 active:scale-95 transition-transform uppercase tracking-wider">
-                                     Создать
+                                 <button onClick={handleCreateRoom} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition-transform uppercase">
+                                     Создать и Оплатить
                                  </button>
                              </div>
                          </div>
@@ -316,13 +359,13 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
              )}
 
              <div className="w-full max-w-md bg-white/5 border border-white/10 rounded-3xl shadow-2xl flex flex-col h-[85vh] overflow-hidden">
-                {/* Top Profile Header */}
+                {/* Header */}
                 <div className="p-6 pb-2">
                     <div className="flex justify-between items-center mb-6">
                         <div className="flex items-center gap-3 cursor-pointer p-2 rounded-xl hover:bg-white/5 transition-colors" onClick={() => setShowProfile(true)}>
                             <div className="relative">
                                 <LegoAvatar color={userProfile.avatarColor} size="w-10 h-10" />
-                                {!wallet && <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border border-black"></div>}
+                                {!wallet && <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border border-black animate-pulse"></div>}
                             </div>
                             <div>
                                 <p className="font-bold text-white text-sm">{userProfile.username}</p>
@@ -331,53 +374,34 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
                                 </div>
                             </div>
                         </div>
-                        <div className="flex gap-2 items-center">
-                             <button onClick={toggleFullscreen} className="bg-white/10 p-2 rounded-full h-9 w-9 flex items-center justify-center">
-                                {isFullscreen ? <Minimize2 className="w-4 h-4 text-white" /> : <Maximize2 className="w-4 h-4 text-white" />}
-                             </button>
-                        </div>
+                        <button onClick={toggleFullscreen} className="bg-white/10 p-2 rounded-full h-9 w-9 flex items-center justify-center">
+                            {isFullscreen ? <Minimize2 className="w-4 h-4 text-white" /> : <Maximize2 className="w-4 h-4 text-white" />}
+                        </button>
                     </div>
 
-                    {/* Tabs */}
                     <div className="flex p-1 bg-black/20 rounded-xl mb-2">
-                        <button 
-                            onClick={() => setActiveTab('ROOMS')}
-                            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'ROOMS' ? 'bg-white/10 text-white shadow' : 'text-gray-500 hover:text-gray-300'}`}
-                        >
-                            КОМНАТЫ
-                        </button>
-                        <button 
-                            onClick={() => setActiveTab('FRIENDS')}
-                            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'FRIENDS' ? 'bg-white/10 text-white shadow' : 'text-gray-500 hover:text-gray-300'}`}
-                        >
-                            ДРУЗЬЯ
-                        </button>
+                        <button onClick={() => setActiveTab('ROOMS')} className={`flex-1 py-2 rounded-lg text-xs font-bold ${activeTab === 'ROOMS' ? 'bg-white/10 text-white shadow' : 'text-gray-500'}`}>КОМНАТЫ</button>
+                        <button onClick={() => setActiveTab('FRIENDS')} className={`flex-1 py-2 rounded-lg text-xs font-bold ${activeTab === 'FRIENDS' ? 'bg-white/10 text-white shadow' : 'text-gray-500'}`}>ДРУЗЬЯ</button>
                     </div>
                 </div>
 
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto px-6 pb-6 scrollbar-hide space-y-3">
+                {/* Rooms List */}
+                <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-3">
                     {activeTab === 'ROOMS' ? (
                         <>
                             {state.roomsList.length === 0 ? (
                                 <div className="text-center py-10 text-gray-500 border-2 border-dashed border-white/5 rounded-xl mt-4">
-                                    Нет активных комнат<br/>
+                                    Нет активных игр<br/>
                                     <span className="text-xs">Вход: {GAME_DEFAULTS.ENTRY_FEE} TON</span>
                                 </div>
                             ) : (
                                 state.roomsList.map(room => (
-                                    <button 
-                                        key={room.id}
-                                        onClick={() => handleJoinRoom(room.id)}
-                                        className="w-full bg-black/20 hover:bg-emerald-500/10 border border-white/10 hover:border-emerald-500/50 p-4 rounded-xl flex items-center justify-between transition-all group"
-                                    >
+                                    <button key={room.id} onClick={() => handleJoinRoom(room.id)} className="w-full bg-black/20 hover:bg-emerald-500/10 border border-white/10 p-4 rounded-xl flex items-center justify-between transition-all group">
                                         <div className="text-left">
                                             <p className="font-bold text-white group-hover:text-emerald-400">{room.name}</p>
                                             <div className="flex items-center gap-2 mt-1">
-                                                <span className={`text-[10px] px-1.5 py-0.5 rounded border ${room.difficulty === Difficulty.HARD ? 'border-red-500/30 text-red-400' : room.difficulty === Difficulty.MEDIUM ? 'border-yellow-500/30 text-yellow-400' : 'border-emerald-500/30 text-emerald-400'}`}>
-                                                    {room.difficulty}
-                                                </span>
-                                                {room.status === 'PLAYING' && <span className="text-[10px] text-red-500 font-bold animate-pulse">ИГРА ИДЕТ</span>}
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded border border-white/10 text-gray-400">{room.difficulty}</span>
+                                                {room.status === 'PLAYING' && <span className="text-[10px] text-red-500 font-bold animate-pulse">LIVE</span>}
                                             </div>
                                         </div>
                                         <div className="flex flex-col items-end gap-1">
@@ -385,7 +409,7 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
                                                 <Users className="w-3 h-3 text-emerald-500" />
                                                 <span className="text-xs font-mono text-white">{room.playersCount}/{room.maxPlayers}</span>
                                             </div>
-                                            <span className="text-[10px] text-[#0098EA] font-mono font-bold">{GAME_DEFAULTS.ENTRY_FEE} TON</span>
+                                            <span className="text-[10px] text-[#0098EA] font-bold">{GAME_DEFAULTS.ENTRY_FEE} TON</span>
                                         </div>
                                     </button>
                                 ))
@@ -394,55 +418,32 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
                     ) : (
                         <div className="space-y-3 mt-2">
                              {MOCK_FRIENDS.map(friend => (
-                                 <div key={friend.id} className="w-full bg-black/20 border border-white/5 p-3 rounded-xl flex items-center justify-between">
+                                 <div key={friend.id} className="bg-black/20 p-3 rounded-xl flex items-center justify-between border border-white/5">
                                      <div className="flex items-center gap-3">
-                                         <div className="relative">
-                                             <LegoAvatar color={friend.avatarColor} size="w-10 h-10" />
-                                             <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-gray-900 ${friend.status === 'ONLINE' ? 'bg-green-500' : friend.status === 'IN_GAME' ? 'bg-yellow-500' : 'bg-gray-500'}`} />
-                                         </div>
+                                         <LegoAvatar color={friend.avatarColor} size="w-10 h-10" />
                                          <div>
                                              <p className="font-bold text-white text-sm">{friend.username}</p>
-                                             <p className="text-[10px] text-gray-400">{friend.status === 'IN_GAME' ? 'В Игре' : friend.status === 'ONLINE' ? 'В сети' : 'Не в сети'}</p>
+                                             <p className="text-[10px] text-gray-500">{friend.status}</p>
                                          </div>
                                      </div>
-                                     <div>
-                                         {friend.status === 'IN_GAME' && friend.currentRoomId ? (
-                                             <button onClick={() => handleJoinRoom(friend.currentRoomId!)} className="bg-yellow-600/20 text-yellow-400 hover:bg-yellow-600/40 border border-yellow-600/50 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1">
-                                                 <Swords className="w-3 h-3"/> Играть
-                                             </button>
-                                         ) : (
-                                             <button className="bg-white/5 text-gray-400 hover:bg-white/10 border border-white/5 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1">
-                                                 <Send className="w-3 h-3"/> Позвать
-                                             </button>
-                                         )}
-                                     </div>
+                                     <button className="bg-white/5 text-gray-400 p-2 rounded-lg"><Send className="w-4 h-4"/></button>
                                  </div>
                              ))}
-                             <div className="text-center pt-4">
-                                 <button className="text-xs text-emerald-500 font-bold hover:underline">+ Добавить друга</button>
-                             </div>
                         </div>
                     )}
                 </div>
 
-                <div className="p-6 pt-2 bg-gradient-to-t from-slate-900 to-transparent">
-                    <button 
-                        onClick={() => setShowCreateRoom(true)}
-                        className="w-full bg-[#0098EA] hover:bg-[#0098EA]/80 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-blue-900/20 active:scale-95 transition-transform"
-                    >
-                        <Plus className="w-5 h-5" /> СОЗДАТЬ
+                <div className="p-6 bg-gradient-to-t from-slate-900 to-transparent">
+                    <button onClick={() => setShowCreateRoom(true)} className="w-full bg-[#0098EA] hover:bg-[#0098EA]/80 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-transform">
+                        <Plus className="w-5 h-5" /> СОЗДАТЬ ИГРУ
                     </button>
                 </div>
              </div>
-             
-             <p className="mt-4 text-[10px] text-gray-500 text-center max-w-xs leading-tight">
-                Игра использует "фантомный" баланс. Депозит переводит реальный TON на счет игры.
-             </p>
         </div>
       );
   }
 
-  // --- WAITING ROOM (LOBBY) ---
+  // --- ЛОББИ ОЖИДАНИЯ ---
   if (state.state === GameState.LOBBY) {
       const isHost = state.players[playerId]?.isHost;
       const roomConfig = state.config;
@@ -452,69 +453,41 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
             <div className="w-full max-w-md bg-white/5 border border-white/10 rounded-3xl p-6 shadow-2xl flex flex-col h-[70vh]">
                 <div className="flex items-center justify-between mb-4 border-b border-white/10 pb-4">
                     <div>
-                        <h2 className="text-xl font-black text-white flex items-center gap-2">
-                            <Users className="text-emerald-400" /> КОМНАТА
-                        </h2>
+                        <h2 className="text-xl font-black text-white flex items-center gap-2"><Users className="text-emerald-400" /> ЛОББИ</h2>
                         <div className="flex gap-2 mt-1">
-                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white flex items-center gap-1"><Shield className="w-3 h-3"/> {roomConfig?.difficulty}</span>
-                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white flex items-center gap-1"><Ruler className="w-3 h-3"/> {roomConfig?.fieldLength}m</span>
+                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white font-bold">{roomConfig?.difficulty}</span>
+                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white font-bold">{roomConfig?.fieldLength}m</span>
                         </div>
                     </div>
-                    
-                    <button onClick={handleLeaveRoom} className="text-xs bg-red-500/10 text-red-400 border border-red-500/20 px-3 py-1.5 rounded-lg font-bold hover:bg-red-500/20 flex items-center gap-1">
-                        <LogOut className="w-3 h-3"/> ВЫЙТИ
-                    </button>
+                    <button onClick={handleLeaveRoom} className="text-xs bg-red-500/10 text-red-400 px-3 py-1.5 rounded-lg font-bold border border-red-500/20">ВЫЙТИ</button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto space-y-2 mb-4 scrollbar-hide">
-                    {players.slice().reverse().map((p, idx) => {
-                        const isMe = p.id === playerId;
-                        return (
-                            <div 
-                                key={p.id} 
-                                className={`
-                                    flex items-center gap-3 p-3 rounded-xl border animate-in fade-in slide-in-from-bottom-2
-                                    ${isMe 
-                                        ? 'bg-yellow-500/20 border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.3)]' 
-                                        : 'bg-black/20 border-white/5'}
-                                `}
-                            >
-                                <LegoAvatar color={p.color} size="w-8 h-8" />
-                                <div className="flex-1">
-                                    <p className={`font-bold text-sm ${isMe ? 'text-yellow-400' : 'text-white'}`}>
-                                        {p.name} {isMe && '(Вы)'}
-                                    </p>
-                                    {p.isHost && <span className="text-[10px] text-purple-400 font-bold uppercase tracking-wide border border-purple-500/30 px-1 rounded">HOST</span>}
-                                </div>
-                                <span className="text-xs text-emerald-500 font-mono">PAID</span>
+                <div className="flex-1 overflow-y-auto space-y-2 mb-4">
+                    {players.map((p) => (
+                        <div key={p.id} className={`flex items-center gap-3 p-3 rounded-xl border ${p.id === playerId ? 'bg-yellow-500/20 border-yellow-400' : 'bg-black/20 border-white/5'}`}>
+                            <LegoAvatar color={p.color} size="w-8 h-8" />
+                            <div className="flex-1">
+                                <p className="font-bold text-sm text-white">{p.name} {p.id === playerId && '(Вы)'}</p>
+                                {p.isHost && <span className="text-[8px] bg-purple-500 text-white px-1 rounded">HOST</span>}
                             </div>
-                        );
-                    })}
+                            <span className="text-[10px] text-emerald-500 font-mono font-bold">ОПЛАЧЕНО</span>
+                        </div>
+                    ))}
                 </div>
 
                 <div className="mt-auto pt-4 border-t border-white/10 text-center">
-                     <div className="mb-4 flex items-center justify-center gap-3">
-                         {isHost ? (
-                             <span className="text-emerald-400 text-sm font-bold animate-pulse">Вы Хост. Начните игру.</span>
-                         ) : (
-                             <>
-                                <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
-                                <span className="text-gray-400 text-sm font-bold">Ожидание Хоста...</span>
-                             </>
-                         )}
-                     </div>
-                     
-                     <div className="text-xs text-gray-500 mb-4 font-mono">
-                        POT: {(state.pot).toFixed(2)} TON
+                     <div className="mb-4 text-xs text-gray-400 font-mono">
+                        ПРИЗОВОЙ ФОНД: {(state.pot).toFixed(2)} TON
                      </div>
 
-                     {isHost && (
-                         <button 
-                            onClick={onStart} 
-                            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl uppercase tracking-widest text-sm"
-                         >
-                            Начать игру ({players.length})
+                     {isHost ? (
+                         <button onClick={onStart} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl uppercase tracking-widest text-sm animate-pulse">
+                            Начать Игру ({players.length})
                          </button>
+                     ) : (
+                         <div className="flex items-center justify-center gap-2 text-gray-500 text-sm">
+                            <Loader2 className="w-4 h-4 animate-spin" /> Ожидание хоста...
+                         </div>
                      )}
                 </div>
             </div>
@@ -522,99 +495,29 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, onStart, o
       );
   }
 
-  // --- GAME OVER SCREEN ---
+  // --- ФИНАЛ ---
   if (state.state === GameState.FINISHED) {
     const iWon = state.winners.includes(playerId);
     return (
-      <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md z-50 animate-in fade-in duration-500 p-4">
-        <div className={`
-            p-6 md:p-10 rounded-3xl border max-w-lg w-full text-center shadow-2xl relative overflow-hidden
-            ${iWon ? 'border-yellow-500/30 bg-gray-900/90' : 'border-red-900/30 bg-gray-900/90'}
-        `}>
-          <div className={`absolute -top-20 -left-20 w-60 h-60 rounded-full blur-[100px] opacity-20 ${iWon ? 'bg-yellow-500' : 'bg-red-600'}`} />
-          
+      <div className="absolute inset-0 flex items-center justify-center bg-black/90 backdrop-blur-md z-50 p-4">
+        <div className={`p-8 rounded-3xl border max-w-sm w-full text-center shadow-2xl ${iWon ? 'border-yellow-500' : 'border-red-500'}`}>
           {iWon ? (
-            <div className="relative z-10">
-              <Trophy className="w-16 h-16 md:w-20 md:h-20 mx-auto text-yellow-400 mb-6 drop-shadow-[0_0_15px_rgba(250,204,21,0.6)]" />
-              <h2 className="text-4xl md:text-6xl font-black text-white mb-2 tracking-tighter">ПОБЕДА</h2>
-              
-              <div className="bg-gradient-to-b from-yellow-500/10 to-transparent p-4 md:p-6 rounded-2xl border border-yellow-500/20 mb-8">
-                <p className="text-xs text-yellow-200/50 uppercase tracking-widest mb-1">Ваш выигрыш</p>
-                <div className="flex items-center justify-center gap-2">
-                     <TonIcon className="w-8 h-8" />
-                     <p className="text-5xl md:text-7xl font-mono font-bold text-yellow-400 tracking-tighter">+{state.winAmount.toFixed(2)}</p>
-                </div>
-              </div>
-            </div>
+            <>
+              <Trophy className="w-20 h-20 mx-auto text-yellow-400 mb-4 animate-bounce" />
+              <h2 className="text-4xl font-black text-white mb-2">ПОБЕДА!</h2>
+              <p className="text-yellow-400 font-mono text-xl mb-6">+{((state.pot * 0.8) / state.winners.length).toFixed(2)} TON</p>
+            </>
           ) : (
-            <div className="relative z-10">
-              <Skull className="w-16 h-16 md:w-20 md:h-20 mx-auto text-red-500 mb-6 drop-shadow-[0_0_20px_rgba(220,38,38,0.4)]" />
-              <h2 className="text-4xl md:text-6xl font-black text-red-600 mb-2 tracking-tighter">ELIMINATED</h2>
-              <p className="text-white/50 mb-4 font-mono text-sm">Потеряно: {GAME_DEFAULTS.ENTRY_FEE} TON</p>
-            </div>
+            <>
+              <Skull className="w-20 h-20 mx-auto text-red-500 mb-4" />
+              <h2 className="text-4xl font-black text-white mb-6">ВЫБЫЛ</h2>
+            </>
           )}
-
-          <button
-            onClick={handleLeaveRoom}
-            className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold py-3 md:py-4 rounded-xl transition-all text-sm md:text-base"
-          >
-            В ГЛАВНОЕ МЕНЮ
-          </button>
+          <button onClick={onReset} className="w-full bg-white text-black font-bold py-3 rounded-xl uppercase">В меню</button>
         </div>
       </div>
     );
   }
 
-  // --- HUD ---
-  return (
-    <div className="absolute inset-0 pointer-events-none">
-       <div className="absolute top-4 right-4 pointer-events-auto">
-            <button 
-                onClick={toggleFullscreen}
-                className="bg-black/30 p-2 rounded-full backdrop-blur border border-white/10 active:bg-white/20"
-            >
-                {isFullscreen ? <Minimize2 className="text-white w-5 h-5" /> : <Maximize2 className="text-white w-5 h-5" />}
-            </button>
-       </div>
-
-      <div className="absolute top-0 left-0 right-0 p-3 md:p-6 flex flex-row justify-between items-start pointer-events-none">
-        
-        <div className="flex flex-col gap-2">
-            <div className="bg-black/60 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/10 shadow-lg flex flex-col min-w-[120px]">
-                <span className="text-[10px] text-gray-400 uppercase font-bold tracking-widest mb-1">Общий Банк</span>
-                <div className="flex items-center gap-1.5">
-                    <TonIcon className="w-5 h-5" />
-                    <span className="text-2xl font-mono text-white font-bold tracking-tight">{state.pot.toFixed(1)}</span>
-                </div>
-            </div>
-        </div>
-
-        <div className={`
-          absolute left-1/2 -translate-x-1/2 top-4 md:top-6
-          px-6 py-2 md:px-12 md:py-3 rounded-full border border-white/10 backdrop-blur-md shadow-2xl transition-all duration-300
-          flex items-center justify-center overflow-hidden group z-10
-          ${state.light === LightColor.GREEN 
-            ? 'bg-emerald-900/60 shadow-[0_0_40px_rgba(16,185,129,0.2)]' 
-            : 'bg-red-900/60 shadow-[0_0_40px_rgba(239,68,68,0.3)]'}
-        `}>
-          <div className={`absolute top-0 left-0 w-full h-1 ${state.light === LightColor.GREEN ? 'bg-emerald-500 shadow-[0_0_10px_#10b981]' : 'bg-red-500 shadow-[0_0_10px_#ef4444]'} `} />
-          <h2 className={`text-2xl md:text-4xl font-black uppercase tracking-[0.2em] drop-shadow-lg ${state.light === LightColor.GREEN ? 'text-emerald-400' : 'text-red-500 animate-pulse'}`}>
-            {state.light === LightColor.GREEN ? "RUN" : "STOP"}
-          </h2>
-        </div>
-
-        <div className="bg-black/60 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/10 text-right shadow-lg min-w-[100px] mr-10 md:mr-12">
-          <span className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">Выжившие</span>
-          <div className="flex items-baseline justify-end gap-1 mt-1">
-             <span className="text-3xl font-mono font-bold text-white">{totalAlive}</span>
-             <span className="text-sm text-gray-500 font-bold">/ {players.length}</span>
-          </div>
-        </div>
-      </div>
-      
-      {state.light === LightColor.RED && !state.players[playerId]?.isEliminated && (
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(220,38,38,0.15)_100%)] z-0 pointer-events-none animate-pulse" />
-      )}
-    </div>
-  );
+  return null;
 };
