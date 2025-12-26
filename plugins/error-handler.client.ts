@@ -1,16 +1,17 @@
-export default defineNuxtPlugin((nuxtApp) => {
+export default defineNuxtPlugin(() => {
   if (process.client) {
-    window.addEventListener('error', (event) => {
-      // Проверяем, связана ли ошибка с тем, что файл не найден (старый кеш)
-      const isChunkError = 
-        event.message.includes('Loading chunk') || 
-        event.message.includes('CSS chunk') ||
-        event.message.includes('Failed to fetch dynamically imported module');
-
-      if (isChunkError) {
-        console.log('Detected chunk error, reloading...');
+    // Слушаем глобальные ошибки загрузки ресурсов
+    window.addEventListener('error', (e) => {
+      const msg = e.message.toLowerCase();
+      // Список типичных ошибок, когда файл не найден из-за нового билда
+      if (
+        msg.includes('failed to fetch dynamically imported module') ||
+        msg.includes('loading chunk') ||
+        msg.includes('unexpected token <') // Это когда вместо JS прилетает HTML 404-й ошибки
+      ) {
+        console.warn('Обнаружена старая версия кэша, перезагружаем...');
         window.location.reload();
       }
-    });
+    }, true); // true нужен, чтобы поймать ошибку на стадии захвата
   }
 });
