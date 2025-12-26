@@ -2,7 +2,7 @@ import React, { useEffect, useState, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Sky, OrbitControls, ContactShadows } from '@react-three/drei';
 import { useTonConnectUI } from '@tonconnect/ui-react';
-import { serverInstance } from './engine/GameServerEngine';
+import { serverInstance } from './logic/GameServerEngine';
 import { GameState, Difficulty, MapLength } from './types';
 
 // --- Компоненты сцены ---
