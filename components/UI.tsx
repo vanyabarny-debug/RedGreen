@@ -8,7 +8,7 @@ import {
     Settings, User, Star, Plus, Loader2, Wallet, ArrowDownCircle, 
     ArrowUpCircle, X, Shield, Swords, Ruler, Clock, HeartHandshake, 
     LogOut, Send, RefreshCw, Gamepad2, Languages, TrendingUp, TrendingDown,
-    History, Percent, Calendar, Edit3
+    History, Percent, Calendar, Edit3, RotateCcw
 } from 'lucide-react';
 import { serverInstance } from '../logic/GameServerEngine';
 import { TonConnectButton, useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
@@ -65,7 +65,8 @@ const TRANSLATIONS = {
         stop: "СТОЙ",
         winRate: "Побед",
         netPnl: "Профит",
-        emptyHistory: "Пусто"
+        emptyHistory: "Пусто",
+        rotate: "ПОВЕРНИТЕ УСТРОЙСТВО"
     },
     EN: {
         rooms: "ROOMS",
@@ -115,7 +116,8 @@ const TRANSLATIONS = {
         stop: "STOP",
         winRate: "Win Rate",
         netPnl: "Net PnL",
-        emptyHistory: "Empty"
+        emptyHistory: "Empty",
+        rotate: "ROTATE DEVICE"
     }
 };
 
@@ -131,8 +133,8 @@ interface UIProps {
   onUpdateProfile: (p: Partial<UserProfile>) => void;
 }
 
-// Reduced base size for avatars on mobile
-const LegoAvatar = ({ color, size = "w-10 h-10" }: { color: string, size?: string }) => (
+// Responsive Avatar: w-9/h-9 on mobile, w-12/h-12 on desktop
+const LegoAvatar = ({ color, size = "w-9 h-9 md:w-12 md:h-12" }: { color: string, size?: string }) => (
   <div className={`${size} rounded-full overflow-hidden border-2 border-white/20 bg-gray-800 flex items-center justify-center relative shadow-lg shrink-0`}>
       <div className="absolute inset-0" style={{ backgroundColor: color }}></div>
       <svg viewBox="0 0 100 100" className="w-3/4 h-3/4 relative z-10 text-yellow-400 fill-current">
@@ -170,25 +172,25 @@ const StatsCard = ({ history, currency, t }: { history: GameHistoryItem[], curre
     const netPnL = relevantHistory.reduce((acc, curr) => acc + curr.amount, 0);
 
     return (
-        <div className="bg-black/40 border border-white/5 rounded-xl p-3 w-full">
-            <p className="text-[10px] text-gray-400 uppercase font-bold mb-2 border-b border-white/5 pb-1 flex items-center justify-between">
+        <div className="bg-black/40 border border-white/5 rounded-xl p-3 md:p-4 w-full">
+            <p className="text-[10px] md:text-xs text-gray-400 uppercase font-bold mb-2 border-b border-white/5 pb-1 flex items-center justify-between">
                 <span>{t.stats}</span>
-                <span className="text-[9px] bg-white/10 px-1.5 py-0.5 rounded">{currency}</span>
+                <span className="text-[9px] md:text-[10px] bg-white/10 px-1.5 py-0.5 rounded">{currency}</span>
             </p>
             
             <div className="grid grid-cols-2 gap-2 mb-2">
                 <div className="flex flex-col items-center p-1.5 bg-white/5 rounded-lg">
-                     <span className="text-[9px] text-gray-400 mb-0.5">{t.winRate}</span>
-                     <div className="flex items-center gap-1 text-white font-mono font-bold text-sm">
-                        <Percent className="w-3 h-3 text-yellow-400" />
+                     <span className="text-[9px] md:text-[10px] text-gray-400 mb-0.5">{t.winRate}</span>
+                     <div className="flex items-center gap-1 text-white font-mono font-bold text-sm md:text-base">
+                        <Percent className="w-3 h-3 md:w-4 md:h-4 text-yellow-400" />
                         {winRate}%
                      </div>
                 </div>
 
                 <div className="flex flex-col items-center p-1.5 bg-white/5 rounded-lg">
-                     <span className="text-[9px] text-gray-400 mb-0.5">{t.netPnl}</span>
-                     <div className={`flex items-center gap-1 font-mono font-bold text-sm ${netPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {netPnL >= 0 ? <TrendingUp className="w-3 h-3"/> : <TrendingDown className="w-3 h-3"/>}
+                     <span className="text-[9px] md:text-[10px] text-gray-400 mb-0.5">{t.netPnl}</span>
+                     <div className={`flex items-center gap-1 font-mono font-bold text-sm md:text-base ${netPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {netPnL >= 0 ? <TrendingUp className="w-3 h-3 md:w-4 md:h-4"/> : <TrendingDown className="w-3 h-3 md:w-4 md:h-4"/>}
                         {netPnL > 0 ? '+' : ''}{netPnL.toFixed(currency === 'TON' ? 2 : 0)}
                      </div>
                 </div>
@@ -196,18 +198,18 @@ const StatsCard = ({ history, currency, t }: { history: GameHistoryItem[], curre
             
             {/* History List */}
             <div className="space-y-1">
-                <p className="text-[9px] text-gray-500 uppercase font-bold mb-1">{t.history}</p>
+                <p className="text-[9px] md:text-[10px] text-gray-500 uppercase font-bold mb-1">{t.history}</p>
                 {relevantHistory.length === 0 ? (
-                    <p className="text-center text-[10px] text-gray-600 italic py-1">{t.emptyHistory}</p>
+                    <p className="text-center text-[10px] md:text-xs text-gray-600 italic py-1">{t.emptyHistory}</p>
                 ) : (
-                    <div className="max-h-24 overflow-y-auto space-y-1 pr-1 scrollbar-thin scrollbar-thumb-white/10">
+                    <div className="max-h-24 md:max-h-32 overflow-y-auto space-y-1 pr-1 scrollbar-thin scrollbar-thumb-white/10">
                         {relevantHistory.slice().reverse().map((item, idx) => {
                              const date = new Date(item.timestamp);
                              const timeStr = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
                              return (
-                                 <div key={idx} className="flex items-center justify-between bg-white/5 p-1.5 rounded-lg text-[10px]">
+                                 <div key={idx} className="flex items-center justify-between bg-white/5 p-1.5 rounded-lg text-[10px] md:text-xs">
                                      <div className="flex items-center gap-1.5">
-                                         {item.outcome === 'WIN' ? <Trophy className="w-2.5 h-2.5 text-yellow-400"/> : <Skull className="w-2.5 h-2.5 text-gray-500"/>}
+                                         {item.outcome === 'WIN' ? <Trophy className="w-2.5 h-2.5 md:w-3.5 md:h-3.5 text-yellow-400"/> : <Skull className="w-2.5 h-2.5 md:w-3.5 md:h-3.5 text-gray-500"/>}
                                          <span className="text-gray-400 font-mono">{timeStr}</span>
                                      </div>
                                      <div className={`font-mono font-bold ${item.amount >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -284,7 +286,7 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
       const hostPlayer: Player = {
           id: playerId,
           name: userProfile.username,
-          x: (Math.random() - 0.5) * 40, // Random Spawn -20 to 20
+          x: (Math.random() - 0.5) * 40, 
           z: -2,
           color: userProfile.avatarColor,
           isEliminated: false,
@@ -323,7 +325,7 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
       const player: Player = {
           id: playerId,
           name: userProfile.username,
-          x: (Math.random() - 0.5) * 40, // Random Spawn -20 to 20
+          x: (Math.random() - 0.5) * 40,
           z: -2,
           color: userProfile.avatarColor,
           isEliminated: false,
@@ -397,31 +399,31 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
   // --- MENU ---
   if (state.state === GameState.MENU) {
       return (
-        // ALLOW SCROLL IN LANDSCAPE: overflow-y-auto and items-center fix
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0f172a]/90 backdrop-blur-md z-50 overflow-y-auto py-8">
+        // Added flex-col to parent and overflow-y-auto to allow full page scrolling if needed on very small screens
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0f172a]/90 backdrop-blur-md z-50 overflow-hidden">
              
-             {/* LANGUAGE TOGGLE (Top Right) */}
+             {/* LANGUAGE TOGGLE */}
              <div className="absolute top-4 right-4 z-[60]">
-                  <button onClick={toggleLanguage} className="flex items-center justify-center bg-slate-800/80 backdrop-blur border border-white/10 p-1.5 rounded-full shadow-lg active:scale-95 transition-transform">
-                      <span className="text-xl leading-none">{lang === 'RU' ? '🇷🇺' : '🇺🇸'}</span>
+                  <button onClick={toggleLanguage} className="flex items-center justify-center bg-slate-800/80 backdrop-blur border border-white/10 p-1.5 md:p-3 rounded-full shadow-lg active:scale-95 transition-transform">
+                      <span className="text-xl md:text-3xl leading-none">{lang === 'RU' ? '🇷🇺' : '🇺🇸'}</span>
                   </button>
              </div>
 
-             {/* MODE TOGGLE SWITCH (Top Center) */}
+             {/* MODE TOGGLE SWITCH */}
              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[60]">
                 <button 
                     onClick={onToggleMode}
                     className={`
-                        relative flex items-center justify-between w-56 h-10 rounded-full p-1 shadow-2xl border-2 transition-all duration-300
+                        relative flex items-center justify-between w-56 md:w-80 h-10 md:h-14 rounded-full p-1 shadow-2xl border-2 transition-all duration-300
                         ${isTrainingMode ? 'bg-slate-800 border-yellow-500/50' : 'bg-slate-900 border-[#0098EA]/50'}
                     `}
                 >
                     <div className={`absolute top-1 bottom-1 w-1/2 rounded-full bg-gradient-to-r transition-all duration-300 ${isTrainingMode ? 'left-1 from-yellow-500 to-yellow-600' : 'left-[50%] from-[#0098EA] to-blue-600'}`}></div>
                     
-                    <div className={`z-10 w-1/2 text-center text-[10px] font-black uppercase tracking-wider transition-colors ${isTrainingMode ? 'text-black' : 'text-gray-500'}`}>
+                    <div className={`z-10 w-1/2 text-center text-[10px] md:text-sm font-black uppercase tracking-wider transition-colors ${isTrainingMode ? 'text-black' : 'text-gray-500'}`}>
                         {t.training}
                     </div>
-                    <div className={`z-10 w-1/2 text-center text-[10px] font-black uppercase tracking-wider transition-colors ${!isTrainingMode ? 'text-white' : 'text-gray-500'}`}>
+                    <div className={`z-10 w-1/2 text-center text-[10px] md:text-sm font-black uppercase tracking-wider transition-colors ${!isTrainingMode ? 'text-white' : 'text-gray-500'}`}>
                         {t.tonGame}
                     </div>
                 </button>
@@ -430,61 +432,50 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
              {/* PROFILE MODAL */}
              {showProfile && (
                  <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 animate-in fade-in zoom-in-95 duration-200 overflow-y-auto">
-                      <div className="bg-slate-800 p-5 rounded-2xl w-full max-w-xs relative border border-white/10 my-auto">
-                          <button onClick={() => setShowProfile(false)} className="absolute top-3 right-3 text-white hover:text-red-400 transition-colors z-10">✕</button>
+                      <div className="bg-slate-800 p-5 md:p-8 rounded-2xl w-full max-w-xs md:max-w-md relative border border-white/10 my-auto">
+                          <button onClick={() => setShowProfile(false)} className="absolute top-3 right-3 text-white hover:text-red-400 transition-colors z-10 md:text-2xl">✕</button>
                           
-                          <div className="flex flex-col items-center mb-4">
-                              <h2 className="text-white text-lg font-bold mb-3">{t.profile}</h2>
-                              
-                              {/* 1. AVATAR */}
-                              <div className="relative group cursor-pointer mb-3" onClick={changeAvatarColor}>
-                                  <LegoAvatar color={userProfile.avatarColor} size="w-20 h-20" />
+                          <div className="flex flex-col items-center mb-4 md:mb-6">
+                              <h2 className="text-white text-lg md:text-2xl font-bold mb-3 md:mb-5">{t.profile}</h2>
+                              <div className="relative group cursor-pointer mb-3 md:mb-5" onClick={changeAvatarColor}>
+                                  <LegoAvatar color={userProfile.avatarColor} size="w-20 h-20 md:w-32 md:h-32" />
                                   <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 rounded-full transition-opacity">
-                                      <RefreshCw className="w-6 h-6 text-white" />
+                                      <RefreshCw className="w-6 h-6 md:w-10 md:h-10 text-white" />
                                   </div>
                               </div>
-                              
-                              {/* 2. USERNAME INPUT (Auto-save) */}
-                              <div className="w-full mb-3 relative">
+                              <div className="w-full mb-3 md:mb-5 relative">
                                   <input 
-                                    className="w-full bg-transparent border-b border-white/20 text-center text-lg font-bold text-white focus:border-emerald-500 outline-none pb-1 placeholder-gray-600"
+                                    className="w-full bg-transparent border-b border-white/20 text-center text-lg md:text-2xl font-bold text-white focus:border-emerald-500 outline-none pb-1 placeholder-gray-600"
                                     value={editName}
                                     onChange={handleNameChange}
                                     placeholder={t.name}
                                   />
-                                  <Edit3 className="w-3 h-3 text-gray-500 absolute right-2 top-1 pointer-events-none" />
+                                  <Edit3 className="w-3 h-3 md:w-5 md:h-5 text-gray-500 absolute right-2 top-1 pointer-events-none" />
                               </div>
-
-                              {/* 3. WALLET CONNECT */}
-                              <div className="w-full flex justify-center mb-4 scale-90">
+                              <div className="w-full flex justify-center mb-4 scale-90 md:scale-100">
                                   <TonConnectButton />
                               </div>
                           </div>
-
-                          {/* 4. BALANCE SECTION */}
-                          <div className="bg-black/30 p-3 rounded-xl mb-4 space-y-3">
+                          <div className="bg-black/30 p-3 md:p-6 rounded-xl mb-4 space-y-3 md:space-y-4">
                               <div>
-                                <p className="text-[10px] text-gray-400 uppercase font-bold mb-1">{t.tonBal}</p>
+                                <p className="text-[10px] md:text-xs text-gray-400 uppercase font-bold mb-1">{t.tonBal}</p>
                                 <div className="flex items-center gap-2">
-                                    <TonIcon className="w-5 h-5" />
-                                    <span className="text-xl font-mono text-white font-bold">{userProfile.tonBalance.toFixed(2)}</span>
+                                    <TonIcon className="w-5 h-5 md:w-7 md:h-7" />
+                                    <span className="text-xl md:text-3xl font-mono text-white font-bold">{userProfile.tonBalance.toFixed(2)}</span>
                                 </div>
                               </div>
                               <div>
-                                <p className="text-[10px] text-gray-400 uppercase font-bold mb-1">{t.coinsBal}</p>
+                                <p className="text-[10px] md:text-xs text-gray-400 uppercase font-bold mb-1">{t.coinsBal}</p>
                                 <div className="flex items-center gap-2">
-                                    <CoinIcon className="w-5 h-5 text-[10px]" />
-                                    <span className="text-xl font-mono text-yellow-400 font-bold">{userProfile.coins}</span>
+                                    <CoinIcon className="w-5 h-5 md:w-7 md:h-7 text-[10px] md:text-xs" />
+                                    <span className="text-xl md:text-3xl font-mono text-yellow-400 font-bold">{userProfile.coins}</span>
                                 </div>
                               </div>
-
-                              <button onClick={handleDeposit} disabled={isProcessing || !wallet} className="w-full bg-[#0098EA] hover:bg-[#0098EA]/80 disabled:opacity-50 text-white py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2">
-                                  {isProcessing ? <Loader2 className="w-3 h-3 animate-spin"/> : <ArrowDownCircle className="w-3 h-3" />} 
+                              <button onClick={handleDeposit} disabled={isProcessing || !wallet} className="w-full bg-[#0098EA] hover:bg-[#0098EA]/80 disabled:opacity-50 text-white py-2 md:py-3 rounded-lg text-xs md:text-sm font-bold flex items-center justify-center gap-2">
+                                  {isProcessing ? <Loader2 className="w-3 h-3 md:w-5 md:h-5 animate-spin"/> : <ArrowDownCircle className="w-3 h-3 md:w-5 md:h-5" />} 
                                   {wallet ? t.deposit : t.connect}
                               </button>
                           </div>
-                          
-                          {/* 5. STATS CARD (Moved to bottom) */}
                           <div className="mb-1">
                               <StatsCard history={userProfile.gameHistory || []} currency={isTrainingMode ? 'COINS' : 'TON'} t={t} />
                           </div>
@@ -495,45 +486,41 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
              {/* CREATE ROOM MODAL */}
              {showCreateRoom && (
                  <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 animate-in fade-in zoom-in-95 duration-200 overflow-y-auto">
-                     <div className="bg-slate-800 p-5 rounded-3xl w-full max-w-xs relative border border-emerald-500/30 shadow-2xl my-auto">
-                         <button onClick={() => setShowCreateRoom(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white"><X className="w-5 h-5"/></button>
-                         <h2 className="text-lg font-black text-white mb-5 flex items-center gap-2"><Plus className="text-emerald-500 w-5 h-5"/> {t.createGame}</h2>
-
-                         <div className="space-y-3">
+                     <div className="bg-slate-800 p-5 md:p-8 rounded-3xl w-full max-w-xs md:max-w-md relative border border-emerald-500/30 shadow-2xl my-auto">
+                         <button onClick={() => setShowCreateRoom(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white"><X className="w-5 h-5 md:w-6 md:h-6"/></button>
+                         <h2 className="text-lg md:text-2xl font-black text-white mb-5 flex items-center gap-2"><Plus className="text-emerald-500 w-5 h-5 md:w-6 md:h-6"/> {t.createGame}</h2>
+                         <div className="space-y-3 md:space-y-5">
                              <div>
-                                 <label className="text-[10px] text-gray-400 uppercase font-bold mb-1 ml-1">{t.name}</label>
-                                 <input className="w-full bg-black/40 text-white p-2.5 rounded-xl border border-white/10 focus:border-emerald-500 outline-none text-sm" value={newRoomName} onChange={e => setNewRoomName(e.target.value)} />
+                                 <label className="text-[10px] md:text-xs text-gray-400 uppercase font-bold mb-1 ml-1">{t.name}</label>
+                                 <input className="w-full bg-black/40 text-white p-2.5 md:p-3 rounded-xl border border-white/10 focus:border-emerald-500 outline-none text-sm md:text-base" value={newRoomName} onChange={e => setNewRoomName(e.target.value)} />
                              </div>
-
                              <div>
-                                 <label className="text-[10px] text-gray-400 uppercase font-bold mb-1 ml-1 flex justify-between">
+                                 <label className="text-[10px] md:text-xs text-gray-400 uppercase font-bold mb-1 ml-1 flex justify-between">
                                      <span>{t.players}</span>
-                                     <span className="text-emerald-400">{newRoomMaxPlayers}</span>
+                                     <span className="text-emerald-400 md:text-sm">{newRoomMaxPlayers}</span>
                                  </label>
-                                 <input type="range" min="2" max="100" value={newRoomMaxPlayers} onChange={e => setNewRoomMaxPlayers(parseInt(e.target.value))} className="w-full accent-emerald-500 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" />
+                                 <input type="range" min="2" max="100" value={newRoomMaxPlayers} onChange={e => setNewRoomMaxPlayers(parseInt(e.target.value))} className="w-full accent-emerald-500 h-2 md:h-3 bg-gray-700 rounded-lg appearance-none cursor-pointer" />
                              </div>
-
-                             <div className="grid grid-cols-2 gap-3">
+                             <div className="grid grid-cols-2 gap-3 md:gap-5">
                                  <div>
-                                     <label className="text-[10px] text-gray-400 uppercase font-bold mb-1 ml-1">{t.diff}</label>
-                                     <select value={newRoomDifficulty} onChange={e => setNewRoomDifficulty(e.target.value as Difficulty)} className="w-full bg-black/40 text-white p-2.5 rounded-xl border border-white/10 outline-none appearance-none text-sm">
+                                     <label className="text-[10px] md:text-xs text-gray-400 uppercase font-bold mb-1 ml-1">{t.diff}</label>
+                                     <select value={newRoomDifficulty} onChange={e => setNewRoomDifficulty(e.target.value as Difficulty)} className="w-full bg-black/40 text-white p-2.5 md:p-3 rounded-xl border border-white/10 outline-none appearance-none text-sm md:text-base">
                                          <option value={Difficulty.EASY}>{t.easy}</option>
                                          <option value={Difficulty.MEDIUM}>{t.med}</option>
                                          <option value={Difficulty.HARD}>{t.hard}</option>
                                      </select>
                                  </div>
                                  <div>
-                                     <label className="text-[10px] text-gray-400 uppercase font-bold mb-1 ml-1">{t.len}</label>
-                                     <select value={newRoomLength} onChange={e => setNewRoomLength(parseInt(e.target.value) as MapLength)} className="w-full bg-black/40 text-white p-2.5 rounded-xl border border-white/10 outline-none appearance-none text-sm">
+                                     <label className="text-[10px] md:text-xs text-gray-400 uppercase font-bold mb-1 ml-1">{t.len}</label>
+                                     <select value={newRoomLength} onChange={e => setNewRoomLength(parseInt(e.target.value) as MapLength)} className="w-full bg-black/40 text-white p-2.5 md:p-3 rounded-xl border border-white/10 outline-none appearance-none text-sm md:text-base">
                                          <option value={MapLength.SHORT}>{t.short}</option>
                                          <option value={MapLength.MEDIUM}>{t.avg}</option>
                                          <option value={MapLength.LONG}>{t.long}</option>
                                      </select>
                                  </div>
                              </div>
-
-                             <div className="pt-4 border-t border-white/10 mt-3">
-                                 <div className="flex justify-between text-xs mb-3">
+                             <div className="pt-4 border-t border-white/10 mt-3 md:mt-5">
+                                 <div className="flex justify-between text-xs md:text-sm mb-3">
                                      <span className="text-gray-400">{t.entry}:</span>
                                      {isTrainingMode ? (
                                         <span className="text-yellow-400 font-bold">{GAME_DEFAULTS.ENTRY_FEE_COINS} Coins</span>
@@ -541,7 +528,7 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
                                         <span className="text-[#0098EA] font-bold">{GAME_DEFAULTS.ENTRY_FEE_TON} TON</span>
                                      )}
                                  </div>
-                                 <button onClick={handleCreateRoom} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl shadow-lg active:scale-95 transition-transform uppercase tracking-wider text-sm">
+                                 <button onClick={handleCreateRoom} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 md:py-4 rounded-xl shadow-lg active:scale-95 transition-transform uppercase tracking-wider text-sm md:text-base">
                                      {t.create}
                                  </button>
                              </div>
@@ -550,40 +537,42 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
                  </div>
              )}
 
-             {/* MAIN CARD - Responsive Width & Padding */}
-             <div className="w-[90%] md:w-full max-w-sm bg-white/5 border border-white/10 rounded-3xl p-4 shadow-2xl flex flex-col h-[75vh] md:h-[85vh] mt-12 md:mt-8">
+             {/* MAIN CARD - UPDATED LAYOUT FOR SCROLLING AND DESKTOP */}
+             <div className="w-[90%] md:w-full max-w-sm md:max-w-md bg-white/5 border border-white/10 rounded-3xl p-3 md:p-6 shadow-2xl flex flex-col max-h-[85vh] h-full mt-10 md:mt-16">
                 {/* Header */}
-                <div className="flex justify-between items-center mb-3">
-                    <div className="flex items-center gap-2 cursor-pointer p-1.5 rounded-xl hover:bg-white/5 transition-colors" onClick={() => setShowProfile(true)}>
+                <div className="flex justify-between items-center mb-2 md:mb-4 shrink-0">
+                    <div className="flex items-center gap-2 md:gap-4 cursor-pointer p-1.5 rounded-xl hover:bg-white/5 transition-colors" onClick={() => setShowProfile(true)}>
                         <div className="relative">
-                            <LegoAvatar color={userProfile.avatarColor} size="w-8 h-8 md:w-10 md:h-10" />
-                            {!wallet && <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border border-black"></div>}
+                            <LegoAvatar color={userProfile.avatarColor} size="w-7 h-7 md:w-12 md:h-12" />
+                            {!wallet && <div className="absolute -top-1 -right-1 w-2.5 h-2.5 md:w-3.5 md:h-3.5 bg-red-500 rounded-full border border-black"></div>}
                         </div>
                         <div>
-                            <p className="font-bold text-white text-xs md:text-sm max-w-[100px] truncate">{userProfile.username}</p>
+                            <p className="font-bold text-white text-xs md:text-base max-w-[90px] md:max-w-[150px] truncate">{userProfile.username}</p>
                             <div className="flex items-center gap-2 text-[10px] md:text-xs font-mono font-bold">
-                                <span className="text-[#0098EA] flex items-center gap-1"><TonIcon className="w-2.5 h-2.5 md:w-3 md:h-3"/> {userProfile.tonBalance.toFixed(2)}</span>
-                                <span className="text-yellow-400 flex items-center gap-1"><CoinIcon className="w-2.5 h-2.5 md:w-3 md:h-3 text-[7px]"/> {userProfile.coins}</span>
+                                <span className="text-[#0098EA] flex items-center gap-1"><TonIcon className="w-2.5 h-2.5 md:w-3.5 md:h-3.5"/> {userProfile.tonBalance.toFixed(2)}</span>
+                                <span className="text-yellow-400 flex items-center gap-1"><CoinIcon className="w-2.5 h-2.5 md:w-3.5 md:h-3.5 text-[7px]"/> {userProfile.coins}</span>
                             </div>
                         </div>
                     </div>
-                    <button onClick={toggleFullscreen} className="bg-white/10 p-2 rounded-full h-8 w-8 flex items-center justify-center">
-                        {isFullscreen ? <Minimize2 className="w-3.5 h-3.5 text-white" /> : <Maximize2 className="w-3.5 h-3.5 text-white" />}
+                    <button onClick={toggleFullscreen} className="bg-white/10 p-2 md:p-3 rounded-full h-8 w-8 md:h-10 md:w-10 flex items-center justify-center shrink-0">
+                        {isFullscreen ? <Minimize2 className="w-3.5 h-3.5 md:w-5 md:h-5 text-white" /> : <Maximize2 className="w-3.5 h-3.5 md:w-5 md:h-5 text-white" />}
                     </button>
                 </div>
 
-                <div className="flex p-1 bg-black/20 rounded-xl mb-3">
-                    <button onClick={() => setActiveTab('ROOMS')} className={`flex-1 py-1.5 rounded-lg text-[10px] md:text-xs font-bold transition-all ${activeTab === 'ROOMS' ? 'bg-white/10 text-white shadow' : 'text-gray-500'}`}>{t.rooms}</button>
-                    <button onClick={() => setActiveTab('FRIENDS')} className={`flex-1 py-1.5 rounded-lg text-[10px] md:text-xs font-bold transition-all ${activeTab === 'FRIENDS' ? 'bg-white/10 text-white shadow' : 'text-gray-500'}`}>{t.friends}</button>
+                {/* Tabs */}
+                <div className="flex p-1 bg-black/20 rounded-xl mb-2 md:mb-4 shrink-0">
+                    <button onClick={() => setActiveTab('ROOMS')} className={`flex-1 py-1.5 md:py-2.5 rounded-lg text-[10px] md:text-sm font-bold transition-all ${activeTab === 'ROOMS' ? 'bg-white/10 text-white shadow' : 'text-gray-500'}`}>{t.rooms}</button>
+                    <button onClick={() => setActiveTab('FRIENDS')} className={`flex-1 py-1.5 md:py-2.5 rounded-lg text-[10px] md:text-sm font-bold transition-all ${activeTab === 'FRIENDS' ? 'bg-white/10 text-white shadow' : 'text-gray-500'}`}>{t.friends}</button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto mb-3 scrollbar-hide space-y-2">
+                {/* LIST CONTAINER */}
+                <div className="flex-1 overflow-y-auto mb-3 scrollbar-hide space-y-2 md:space-y-3 min-h-0">
                     {activeTab === 'ROOMS' ? (
                         <>
                             {state.roomsList.filter(r => r.isTraining === isTrainingMode).length === 0 ? (
-                                <div className="text-center py-8 text-gray-500 border-2 border-dashed border-white/5 rounded-xl">
-                                    <p className="text-xs mb-1">{t.noRooms}</p>
-                                    <span className="text-[10px] opacity-70">
+                                <div className="text-center py-8 md:py-12 text-gray-500 border-2 border-dashed border-white/5 rounded-xl">
+                                    <p className="text-xs md:text-sm mb-1">{t.noRooms}</p>
+                                    <span className="text-[10px] md:text-xs opacity-70">
                                         {t.inputWait}: {isTrainingMode ? `${GAME_DEFAULTS.ENTRY_FEE_COINS} Coins` : `${GAME_DEFAULTS.ENTRY_FEE_TON} TON`}
                                     </span>
                                 </div>
@@ -592,21 +581,21 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
                                     <button 
                                         key={room.id}
                                         onClick={() => handleJoinRoom(room.id)}
-                                        className="w-full bg-black/20 hover:bg-emerald-500/10 border border-white/10 hover:border-emerald-500/50 p-3 rounded-xl flex items-center justify-between transition-all group"
+                                        className="w-full bg-black/20 hover:bg-emerald-500/10 border border-white/10 hover:border-emerald-500/50 p-2.5 md:p-4 rounded-xl flex items-center justify-between transition-all group shrink-0"
                                     >
                                         <div className="text-left">
-                                            <p className="font-bold text-white text-xs group-hover:text-emerald-400">{room.name}</p>
+                                            <p className="font-bold text-white text-[11px] md:text-base group-hover:text-emerald-400">{room.name}</p>
                                             <div className="flex items-center gap-1.5 mt-1">
-                                                <span className="text-[9px] px-1.5 py-0.5 rounded border border-white/10 text-gray-400">{room.difficulty}</span>
-                                                {room.status === 'PLAYING' && <span className="text-[9px] text-red-500 font-bold animate-pulse">LIVE</span>}
+                                                <span className="text-[9px] md:text-xs px-1.5 py-0.5 rounded border border-white/10 text-gray-400">{room.difficulty}</span>
+                                                {room.status === 'PLAYING' && <span className="text-[9px] md:text-xs text-red-500 font-bold animate-pulse">LIVE</span>}
                                             </div>
                                         </div>
                                         <div className="flex flex-col items-end gap-0.5">
                                             <div className="flex items-center gap-1.5 bg-black/30 px-2 py-0.5 rounded-full">
-                                                <Users className="w-2.5 h-2.5 text-emerald-500" />
-                                                <span className="text-[10px] font-mono text-white">{room.playersCount}/{room.maxPlayers}</span>
+                                                <Users className="w-2.5 h-2.5 md:w-4 md:h-4 text-emerald-500" />
+                                                <span className="text-[10px] md:text-xs font-mono text-white">{room.playersCount}/{room.maxPlayers}</span>
                                             </div>
-                                            <span className={`text-[9px] font-mono font-bold ${isTrainingMode ? 'text-yellow-400' : 'text-[#0098EA]'}`}>
+                                            <span className={`text-[9px] md:text-sm font-mono font-bold ${isTrainingMode ? 'text-yellow-400' : 'text-[#0098EA]'}`}>
                                                 {isTrainingMode ? `${GAME_DEFAULTS.ENTRY_FEE_COINS} C` : `${GAME_DEFAULTS.ENTRY_FEE_TON} TON`}
                                             </span>
                                         </div>
@@ -615,28 +604,28 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
                             )}
                         </>
                     ) : (
-                        <div className="space-y-2 mt-1">
+                        <div className="space-y-2 mt-1 md:space-y-3">
                              {friends.map(friend => (
-                                 <div key={friend.id} className="w-full bg-black/20 border border-white/5 p-2.5 rounded-xl flex items-center justify-between">
-                                     <div className="flex items-center gap-2">
+                                 <div key={friend.id} className="w-full bg-black/20 border border-white/5 p-2.5 md:p-4 rounded-xl flex items-center justify-between shrink-0">
+                                     <div className="flex items-center gap-2 md:gap-4">
                                          <div className="relative">
-                                             <LegoAvatar color={friend.avatarColor} size="w-8 h-8" />
-                                             <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-gray-900 ${friend.status === 'ONLINE' ? 'bg-green-500' : friend.status === 'IN_GAME' ? 'bg-yellow-500' : 'bg-gray-500'}`} />
+                                             <LegoAvatar color={friend.avatarColor} size="w-7 h-7 md:w-10 md:h-10" />
+                                             <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 md:w-3.5 md:h-3.5 rounded-full border-2 border-gray-900 ${friend.status === 'ONLINE' ? 'bg-green-500' : friend.status === 'IN_GAME' ? 'bg-yellow-500' : 'bg-gray-500'}`} />
                                          </div>
                                          <div>
-                                             <p className="font-bold text-white text-xs">{friend.username}</p>
-                                             <p className="text-[9px] text-gray-400">{friend.status}</p>
+                                             <p className="font-bold text-white text-[11px] md:text-sm">{friend.username}</p>
+                                             <p className="text-[9px] md:text-xs text-gray-400">{friend.status}</p>
                                          </div>
                                      </div>
                                      {friend.status === 'IN_GAME' && (
-                                         <button className="bg-yellow-600/20 text-yellow-400 border border-yellow-600/50 px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1">
-                                             <Swords className="w-2.5 h-2.5"/> {t.join}
+                                         <button className="bg-yellow-600/20 text-yellow-400 border border-yellow-600/50 px-2.5 md:px-4 py-1 md:py-2 rounded-lg text-[10px] md:text-xs font-bold flex items-center gap-1">
+                                             <Swords className="w-2.5 h-2.5 md:w-4 md:h-4"/> {t.join}
                                          </button>
                                      )}
                                  </div>
                              ))}
                              <div className="text-center pt-2">
-                                 <button className="text-[10px] text-emerald-500 font-bold hover:underline opacity-50 cursor-not-allowed">{t.sync}</button>
+                                 <button className="text-[10px] md:text-sm text-emerald-500 font-bold hover:underline opacity-50 cursor-not-allowed">{t.sync}</button>
                              </div>
                         </div>
                     )}
@@ -644,9 +633,9 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
 
                 <button 
                     onClick={() => setShowCreateRoom(true)}
-                    className="w-full bg-[#0098EA] hover:bg-[#0098EA]/80 text-white font-black py-3 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-blue-900/20 active:scale-95 transition-transform text-sm"
+                    className="w-full bg-[#0098EA] hover:bg-[#0098EA]/80 text-white font-black py-3 md:py-5 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-blue-900/20 active:scale-95 transition-transform text-sm md:text-base shrink-0"
                 >
-                    <Plus className="w-4 h-4" /> {t.create}
+                    <Plus className="w-4 h-4 md:w-5 md:h-5" /> {t.create}
                 </button>
              </div>
         </div>
@@ -658,40 +647,40 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
       const isHost = state.players[playerId]?.isHost;
       return (
         <div className="absolute inset-0 flex items-center justify-center bg-[#0f172a]/90 backdrop-blur-md z-50 p-4">
-            <div className="w-[90%] md:w-full max-w-sm bg-white/5 border border-white/10 rounded-3xl p-5 shadow-2xl flex flex-col h-[60vh] md:h-[70vh]">
-                <div className="flex items-center justify-between mb-4 border-b border-white/10 pb-3">
-                    <h2 className="text-lg font-black text-white flex items-center gap-2">
-                        <Users className="text-emerald-400 w-5 h-5" /> {t.lobby}
+            <div className="w-[90%] md:w-full max-w-sm md:max-w-md bg-white/5 border border-white/10 rounded-3xl p-5 md:p-8 shadow-2xl flex flex-col h-[60vh] md:h-[70vh]">
+                <div className="flex items-center justify-between mb-4 md:mb-6 border-b border-white/10 pb-3 md:pb-4">
+                    <h2 className="text-lg md:text-2xl font-black text-white flex items-center gap-2">
+                        <Users className="text-emerald-400 w-5 h-5 md:w-7 md:h-7" /> {t.lobby}
                     </h2>
-                    <button onClick={handleLeaveRoom} className="text-[10px] text-red-400 font-bold hover:bg-red-500/10 px-2 py-1 rounded-lg transition-colors flex items-center gap-1">
-                        <LogOut className="w-3 h-3"/> {t.exit}
+                    <button onClick={handleLeaveRoom} className="text-[10px] md:text-sm text-red-400 font-bold hover:bg-red-500/10 px-2 py-1 md:px-3 md:py-2 rounded-lg transition-colors flex items-center gap-1">
+                        <LogOut className="w-3 h-3 md:w-4 md:h-4"/> {t.exit}
                     </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto space-y-2 mb-3 scrollbar-hide">
+                <div className="flex-1 overflow-y-auto space-y-2 md:space-y-3 mb-3 scrollbar-hide">
                     {players.map((p) => (
-                        <div key={p.id} className={`flex items-center gap-3 p-2.5 rounded-xl border ${p.id === playerId ? 'bg-yellow-500/20 border-yellow-400' : 'bg-black/20 border-white/5'}`}>
-                            <LegoAvatar color={p.color} size="w-8 h-8" />
+                        <div key={p.id} className={`flex items-center gap-3 md:gap-4 p-2.5 md:p-4 rounded-xl border ${p.id === playerId ? 'bg-yellow-500/20 border-yellow-400' : 'bg-black/20 border-white/5'}`}>
+                            <LegoAvatar color={p.color} size="w-7 h-7 md:w-10 md:h-10" />
                             <div className="flex-1">
-                                <p className="font-bold text-xs text-white">{p.name} {p.id === playerId && '(You)'}</p>
-                                {p.isHost && <span className="text-[9px] bg-purple-500 px-1 rounded text-white ml-2">HOST</span>}
+                                <p className="font-bold text-xs md:text-base text-white">{p.name} {p.id === playerId && '(You)'}</p>
+                                {p.isHost && <span className="text-[9px] md:text-xs bg-purple-500 px-1.5 rounded text-white ml-2">HOST</span>}
                             </div>
                         </div>
                     ))}
                 </div>
 
                 <div className="mt-auto pt-3 border-t border-white/10 text-center">
-                     <div className="mb-3 text-[10px] font-mono text-gray-400">
+                     <div className="mb-3 text-[10px] md:text-sm font-mono text-gray-400">
                         {t.pot}: {(state.pot).toFixed(2)} {isTrainingMode ? 'Coins' : 'TON'}
                      </div>
 
                      {isHost ? (
-                         <button onClick={onStart} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl uppercase tracking-widest text-xs animate-pulse">
+                         <button onClick={onStart} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 md:py-4 rounded-xl uppercase tracking-widest text-xs md:text-base animate-pulse">
                             {t.start}
                          </button>
                      ) : (
-                         <div className="flex items-center justify-center gap-2 text-gray-500 text-xs">
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t.waitHost}
+                         <div className="flex items-center justify-center gap-2 text-gray-500 text-xs md:text-sm">
+                            <Loader2 className="w-3.5 h-3.5 md:w-5 md:h-5 animate-spin" /> {t.waitHost}
                          </div>
                      )}
                 </div>
@@ -706,24 +695,24 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
     
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-black/90 backdrop-blur-md z-50 p-4 animate-in fade-in duration-500 overflow-y-auto">
-        <div className={`p-6 rounded-3xl border max-w-xs w-full text-center shadow-2xl relative overflow-hidden ${iWon ? 'border-yellow-500' : 'border-red-500'} my-auto`}>
+        <div className={`p-6 md:p-10 rounded-3xl border max-w-xs md:max-w-md w-full text-center shadow-2xl relative overflow-hidden ${iWon ? 'border-yellow-500' : 'border-red-500'} my-auto`}>
           {iWon ? (
             <>
-              <Trophy className="w-16 h-16 mx-auto text-yellow-400 mb-3 animate-bounce" />
-              <h2 className="text-3xl font-black text-white mb-1">{t.win}</h2>
+              <Trophy className="w-16 h-16 md:w-24 md:h-24 mx-auto text-yellow-400 mb-3 md:mb-5 animate-bounce" />
+              <h2 className="text-3xl md:text-5xl font-black text-white mb-1 md:mb-2">{t.win}</h2>
             </>
           ) : (
             <>
-              <Skull className="w-16 h-16 mx-auto text-red-500 mb-3" />
-              <h2 className="text-3xl font-black text-white mb-4">{t.eliminated}</h2>
+              <Skull className="w-16 h-16 md:w-24 md:h-24 mx-auto text-red-500 mb-3 md:mb-5" />
+              <h2 className="text-3xl md:text-5xl font-black text-white mb-4 md:mb-6">{t.eliminated}</h2>
             </>
           )}
           
-          <div className="mb-4">
+          <div className="mb-4 md:mb-8">
               <StatsCard history={userProfile.gameHistory || []} currency={isTrainingMode ? 'COINS' : 'TON'} t={t} />
           </div>
 
-          <button onClick={handleLeaveRoom} className="w-full bg-white text-black font-bold py-3 rounded-xl uppercase hover:bg-gray-200 text-sm">
+          <button onClick={handleLeaveRoom} className="w-full bg-white text-black font-bold py-3 md:py-4 rounded-xl uppercase hover:bg-gray-200 text-sm md:text-lg">
             {t.menu}
           </button>
         </div>
@@ -737,53 +726,61 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
 
   return (
     <div className="absolute inset-0 pointer-events-none">
+       {/* ORIENTATION WARNING - Only shows in Portrait when Playing */}
+       {state.state === GameState.PLAYING && (
+           <div className="portrait:flex hidden fixed inset-0 z-[100] bg-black/90 flex-col items-center justify-center text-center p-8 pointer-events-auto">
+               <RotateCcw className="w-16 h-16 text-white mb-4 animate-spin-slow" />
+               <h2 className="text-2xl font-black text-white uppercase mb-2">{t.rotate}</h2>
+               <p className="text-gray-400 text-sm">Please rotate your device to landscape mode for the best experience.</p>
+           </div>
+       )}
+
        {/* Top Right Controls */}
        <div className="absolute top-3 right-3 pointer-events-auto flex flex-col gap-2">
-            <button onClick={toggleFullscreen} className="bg-black/30 p-2 rounded-full backdrop-blur border border-white/10">
-                {isFullscreen ? <Minimize2 className="text-white w-4 h-4" /> : <Maximize2 className="text-white w-4 h-4" />}
+            <button onClick={toggleFullscreen} className="bg-black/30 p-2 md:p-3 rounded-full backdrop-blur border border-white/10">
+                {isFullscreen ? <Minimize2 className="text-white w-4 h-4 md:w-6 md:h-6" /> : <Maximize2 className="text-white w-4 h-4 md:w-6 md:h-6" />}
             </button>
        </div>
 
        {/* HUD BAR */}
       <div className="absolute top-0 left-0 right-0 p-3 md:p-6 flex flex-row justify-between items-start pointer-events-none">
         
-        {/* LEFT: POT */}
+        {/* LEFT: POT + Potential Win */}
         <div className="flex flex-col gap-2">
-            <div className="bg-black/60 backdrop-blur-md px-3 py-2 rounded-2xl border border-white/10 shadow-lg flex flex-col min-w-[100px]">
-                <span className="text-[9px] text-gray-400 uppercase font-bold tracking-widest mb-0.5">{t.pot}</span>
+            <div className="bg-black/60 backdrop-blur-md px-3 py-2 md:px-5 md:py-3 rounded-2xl border border-white/10 shadow-lg flex flex-col min-w-[100px] md:min-w-[150px]">
+                <span className="text-[9px] md:text-xs text-gray-400 uppercase font-bold tracking-widest mb-0.5">{t.pot}</span>
                 <div className="flex items-center gap-1">
-                    {isTrainingMode ? <CoinIcon className="w-4 h-4 text-[9px]" /> : <TonIcon className="w-4 h-4" />}
-                    <span className="text-xl font-mono text-white font-bold tracking-tight">{state.pot.toFixed(1)}</span>
+                    {isTrainingMode ? <CoinIcon className="w-4 h-4 md:w-6 md:h-6 text-[9px] md:text-xs" /> : <TonIcon className="w-4 h-4 md:w-6 md:h-6" />}
+                    <span className="text-xl md:text-3xl font-mono text-white font-bold tracking-tight">{state.pot.toFixed(1)}</span>
+                </div>
+                {/* MOVED: Potential win here */}
+                <div className="mt-1 border-t border-white/10 pt-1 flex items-center gap-1">
+                    <span className="text-[8px] md:text-[10px] text-gray-500 uppercase">{t.perPlayer}:</span>
+                    <span className="text-[10px] md:text-sm font-mono font-bold text-emerald-400">+{potentialWin.toFixed(0)}</span>
                 </div>
             </div>
         </div>
 
-        {/* CENTER: LIGHT + TIMER + POTENTIAL WIN */}
-        <div className="absolute left-1/2 -translate-x-1/2 top-4 flex flex-col items-center">
+        {/* CENTER: LIGHT + TIMER (Removed pill) */}
+        <div className="absolute left-1/2 -translate-x-1/2 top-4 md:top-8 flex flex-col items-center">
             {/* TRAFFIC LIGHT BADGE */}
-            <div className={`px-6 py-1.5 rounded-full border border-white/10 backdrop-blur-md shadow-2xl flex items-center justify-center overflow-hidden z-10 ${state.light === LightColor.GREEN ? 'bg-emerald-900/60' : 'bg-red-900/60'}`}>
+            <div className={`px-6 py-1.5 md:px-10 md:py-3 rounded-full border border-white/10 backdrop-blur-md shadow-2xl flex items-center justify-center overflow-hidden z-10 ${state.light === LightColor.GREEN ? 'bg-emerald-900/60' : 'bg-red-900/60'}`}>
                 <div className={`absolute top-0 left-0 w-full h-1 ${state.light === LightColor.GREEN ? 'bg-emerald-500' : 'bg-red-500'} `} />
-                <h2 className={`text-2xl font-black uppercase tracking-[0.2em] ${state.light === LightColor.GREEN ? 'text-emerald-400' : 'text-red-500 animate-pulse'}`}>
+                <h2 className={`text-2xl md:text-5xl font-black uppercase tracking-[0.2em] ${state.light === LightColor.GREEN ? 'text-emerald-400' : 'text-red-500 animate-pulse'}`}>
                     {state.light === LightColor.GREEN ? t.run : t.stop}
                 </h2>
             </div>
             
             {/* TIMER */}
-            <div className={`mt-1 font-mono text-3xl font-black drop-shadow-md tracking-tighter ${state.timeRemaining < 3000 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+            <div className={`mt-1 font-mono text-3xl md:text-6xl font-black drop-shadow-md tracking-tighter ${state.timeRemaining < 3000 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
                 {(state.timeRemaining / 1000).toFixed(1)}
-            </div>
-
-            {/* POTENTIAL WIN PILL */}
-            <div className="mt-0.5 bg-black/50 backdrop-blur rounded-lg px-2 py-0.5 border border-white/10 flex items-center gap-1 animate-in fade-in slide-in-from-top-2">
-                <span className="text-[8px] text-gray-400 uppercase">{t.perPlayer}:</span>
-                <span className="text-xs font-mono font-bold text-emerald-400">+{potentialWin.toFixed(1)}</span>
             </div>
         </div>
 
         {/* RIGHT: ALIVE COUNT */}
-        <div className="bg-black/60 backdrop-blur-md px-3 py-2 rounded-2xl border border-white/10 text-right shadow-lg mr-10 md:mr-0">
-          <span className="text-[9px] text-gray-400 uppercase font-bold tracking-widest">{t.alive}</span>
-          <div className="text-2xl font-mono font-bold text-white mt-0.5">{totalAlive} <span className="text-xs text-gray-500">/ {players.length}</span></div>
+        <div className="bg-black/60 backdrop-blur-md px-3 py-2 md:px-5 md:py-3 rounded-2xl border border-white/10 text-right shadow-lg mr-10 md:mr-0">
+          <span className="text-[9px] md:text-xs text-gray-400 uppercase font-bold tracking-widest">{t.alive}</span>
+          <div className="text-2xl md:text-4xl font-mono font-bold text-white mt-0.5">{totalAlive} <span className="text-xs md:text-base text-gray-500">/ {players.length}</span></div>
         </div>
       </div>
       
