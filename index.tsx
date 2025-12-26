@@ -1,23 +1,27 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import App from './App';
+import { TonConnectUIProvider } from '@tonconnect/ui-react';
 
-// ВРЕМЕННО УБИРАЕМ ВСЁ ТЯЖЕЛОЕ (TonConnect, App, Three)
-// Мы хотим проверить, заведется ли просто голый React
-
-const TestApp = () => (
-  <div style={{ background: 'blue', color: 'white', height: '100vh', display: 'flex', alignItems: 'center', justifyCenter: 'center', flexDirection: 'column' }}>
-    <h1>REACT ЗАПУСТИЛСЯ!</h1>
-    <p>Если ты это видишь на Маке, значит проблема в TonConnect или App.tsx</p>
-  </div>
-);
-
-const rootElement = document.getElementById('root');
-if (rootElement) {
-  const root = ReactDOM.createRoot(rootElement);
-  root.render(<TestApp />);
-}
-
-// Телега
+// 1. Сразу инициализируем Telegram
 if (window.Telegram && window.Telegram.WebApp) {
   window.Telegram.WebApp.ready();
+  window.Telegram.WebApp.expand();
 }
+
+const rootElement = document.getElementById('root');
+if (!rootElement) {
+  throw new Error("Could not find root element to mount to");
+}
+
+// 2. Используй лучше свой домен для манифеста, GitHub часто блочит новые Safari
+const MANIFEST_URL = 'https://red-green-gray.vercel.app/tonconnect-manifest.json';
+
+const root = ReactDOM.createRoot(rootElement);
+
+// 3. Убираем StrictMode для теста (он часто причина двойных багов на новых iOS)
+root.render(
+  <TonConnectUIProvider manifestUrl={MANIFEST_URL}>
+    <App />
+  </TonConnectUIProvider>
+);
