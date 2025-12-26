@@ -1,57 +1,48 @@
-import { 
-  GameSchema, GameState, LightColor, Player, Obstacle, 
-  GAME_DEFAULTS, RoomInfo, Difficulty, MapLength, RoomSettings 
-} from '../types';
+import { GameSchema, GameState, LightColor, Player, Obstacle, GAME_DEFAULTS, RoomInfo, Difficulty, MapLength, RoomSettings } from '../types';
 
-// Канал связи между вкладками/окнами Telegram
-const networkChannel = new BroadcastChannel('game_channel');
+// Safely initialize BroadcastChannel. 
+// Some Telegram WebViews block this or throw errors, causing the app to fail at startup.
+let networkChannel: BroadcastChannel | null = null;
+try {
+    networkChannel = new BroadcastChannel('game_channel');
+} catch (e) {
+    console.warn("BroadcastChannel not supported in this environment. Multiplayer sync locally might be limited.", e);
+}
 
 type NetworkMessage = 
-  | { type: 'ROOM_CREATE', room: RoomInfo, obstacles: Obstacle[] }
-  | { type: 'ROOM_QUERY' } 
+  | { type: 'ROOM_CREATE', room: RoomInfo }
   | { type: 'ROOM_JOIN', roomId: string, player: Player }
   | { type: 'ROOM_LEAVE', roomId: string, playerId: string }
   | { type: 'PLAYER_MOVE', roomId: string, playerId: string, x: number, z: number }
   | { type: 'STATE_UPDATE', roomId: string, partialState: Partial<GameSchema> }
   | { type: 'GAME_START', roomId: string }
-  | { type: 'GAME_RESET', roomId: string }
-  | { type: 'HEARTBEAT', roomId: string, playerId: string };
+  | { type: 'GAME_RESET', roomId: string };
 
 export class GameServerEngine {
   public state: GameSchema;
-  private loopId: any = null;
-  private lastUpdate: number = Date.now();
+  private loopId: any;
+  private lastUpdate: number;
   private listeners: ((state: GameSchema) => void)[] = [];
   
-  // Логика таймаутов
-  private lastSeen: Map<string, number> = new Map();
-  private readonly TIMEOUT_MS = 15000; 
-  private readonly HEARTBEAT_INTERVAL = 5000;
-
-  // Игровые тайминги
   private lastLightSwitchTime: number = 0;
   private readonly GRACE_PERIOD_MS = 400;
   
-  public myPlayerId: string = '';
-  public isHost: boolean = false;
+  private myPlayerId: string = '';
+  private isHost: boolean = false;
 
   constructor() {
-    this.state = this.getInitialState();
+    this.state = this.getInitialState(); 
+    this.lastUpdate = Date.now();
     
-    networkChannel.onmessage = (event) => {
-      this.handleNetworkMessage(event.data as NetworkMessage);
-    };
-
-    // Фоновые процессы
-    setInterval(() => this.checkAlivePlayers(), 5000);
-    setInterval(() => this.sendHeartbeat(), this.HEARTBEAT_INTERVAL);
-    
-    // Запрос списка комнат при входе
-    this.broadcastNetwork({ type: 'ROOM_QUERY' });
+    if (networkChannel) {
+        networkChannel.onmessage = (event) => {
+          this.handleNetworkMessage(event.data as NetworkMessage);
+        };
+    }
   }
 
   public setPlayerId(id: string) {
-    this.myPlayerId = id;
+      this.myPlayerId = id;
   }
 
   private getInitialState(): GameSchema {
@@ -63,7 +54,6 @@ export class GameServerEngine {
       players: {},
       obstacles: [],
       entryFee: GAME_DEFAULTS.ENTRY_FEE_COINS,
-      currency: 'COINS',
       pot: 0,
       winners: [],
       winAmount: 0,
@@ -76,316 +66,459 @@ export class GameServerEngine {
     };
   }
 
-  // --- СИСТЕМА ЖИЗНЕСПОСОБНОСТИ (ANTIPHOST) ---
-
-  private sendHeartbeat() {
-    if (this.state.roomId && this.myPlayerId) {
-      this.broadcastNetwork({ 
-        type: 'HEARTBEAT', 
-        roomId: this.state.roomId, 
-        playerId: this.myPlayerId 
-      });
-    }
-  }
-
-  private checkAlivePlayers() {
-    if (!this.isHost || !this.state.roomId) return;
-    const now = Date.now();
+  private generateObstacles(length: number, width: number, difficulty: Difficulty): Obstacle[] {
+    const obstacles: Obstacle[] = [];
     
-    Object.keys(this.state.players).forEach(pid => {
-      if (pid !== this.myPlayerId) {
-        const lastPing = this.lastSeen.get(pid) || 0;
-        if (now - lastPing > this.TIMEOUT_MS) {
-          console.warn(`Игрок ${pid} отключился (таймаут)`);
-          this.removePlayer(pid);
-        }
+    // Настройки сложности
+    let sawDensity = 50; // Каждые 50 метров
+    let sawSpeedMultiplier = 1;
+    let ballCount = 3;
+
+    if (difficulty === Difficulty.EASY) {
+        sawDensity = 70;
+        sawSpeedMultiplier = 0.7;
+        ballCount = 2;
+    } else if (difficulty === Difficulty.HARD) {
+        sawDensity = 30;
+        sawSpeedMultiplier = 1.5;
+        ballCount = 5;
+    }
+
+    // Генерация Пил
+    const sawZPositions = [];
+    for(let z = 40; z < length - 20; z += sawDensity) {
+        sawZPositions.push(z);
+    }
+
+    sawZPositions.forEach((z) => {
+      // Рандомизация позиции Z, чтобы не было слишком линейно
+      const actualZ = z + (Math.random() * 10 - 5);
+      const count = Math.random() > 0.5 ? 2 : 1;
+      
+      for (let i = 0; i < count; i++) {
+        obstacles.push({
+          id: `saw_${actualZ}_${i}`,
+          type: 'SAW',
+          x: (Math.random() * (width - 15)) - ((width - 15) / 2),
+          z: actualZ,
+          radius: 2.0,
+          speed: (4 + Math.random() * 2) * sawSpeedMultiplier, 
+          direction: Math.random() > 0.5 ? 1 : -1
+        });
       }
     });
+
+    // Генерация Шаров (Индиана Джонс)
+    for(let i = 0; i < ballCount; i++) {
+       obstacles.push({
+          id: `ball_${i}`,
+          type: 'BALL',
+          x: (Math.random() * (width - 10)) - ((width - 10) / 2),
+          z: length + (i * 30), 
+          radius: difficulty === Difficulty.HARD ? 4.5 : 3.5,
+          speed: (2 + Math.random() * 1.5) * sawSpeedMultiplier, 
+          direction: -1 
+       });
+    }
+    return obstacles;
   }
 
-  private removePlayer(pid: string) {
-    delete this.state.players[pid];
-    this.lastSeen.delete(pid);
-    const r = this.state.roomsList.find(rm => rm.id === this.state.roomId);
-    if (r) r.playersCount = Object.keys(this.state.players).length;
-    this.broadcast();
-  }
-
-  // --- УПРАВЛЕНИЕ КОМНАТАМИ ---
+  // --- ROOM MANAGEMENT ---
 
   public createRoom(name: string, settings: RoomSettings, hostPlayer: Player) {
-    const roomId = `room_${Date.now()}`;
-    this.isHost = true;
-    
-    this.state.roomId = roomId;
-    this.state.state = GameState.LOBBY;
-    this.state.config = {
-      fieldLength: settings.length,
-      fieldWidth: 60,
-      difficulty: settings.difficulty
-    };
+      const roomId = `room_${Date.now()}`;
+      
+      const newRoomInfo: RoomInfo = {
+          id: roomId,
+          name: name,
+          hostId: hostPlayer.id,
+          playersCount: 1,
+          maxPlayers: settings.maxPlayers,
+          difficulty: settings.difficulty,
+          status: 'WAITING',
+          isTraining: settings.isTraining
+      };
 
-    // Генерируем препятствия ОДИН РАЗ на хосте
-    this.state.obstacles = this.generateObstacles(settings.length, 60, settings.difficulty);
-    this.state.players = { [hostPlayer.id]: { ...hostPlayer, isHost: true } };
-    this.state.currency = settings.isTraining ? 'COINS' : 'TON';
-    this.state.entryFee = settings.isTraining ? GAME_DEFAULTS.ENTRY_FEE_COINS : GAME_DEFAULTS.ENTRY_FEE_TON;
-    this.state.pot = this.state.entryFee;
+      this.isHost = true;
+      this.state.roomId = roomId;
+      this.state.state = GameState.LOBBY;
+      
+      // Применяем настройки
+      this.state.config = {
+          fieldLength: settings.length,
+          fieldWidth: 60,
+          difficulty: settings.difficulty
+      };
 
-    const roomInfo: RoomInfo = {
-      id: roomId,
-      name,
-      hostId: hostPlayer.id,
-      playersCount: 1,
-      maxPlayers: settings.maxPlayers,
-      difficulty: settings.difficulty,
-      status: 'WAITING',
-      isTraining: settings.isTraining,
-      entryFee: this.state.entryFee,
-      currency: this.state.currency as any
-    };
+      this.state.obstacles = this.generateObstacles(settings.length, 60, settings.difficulty);
+      this.state.players = { [hostPlayer.id]: { ...hostPlayer, isHost: true } };
+      
+      const fee = settings.isTraining ? GAME_DEFAULTS.ENTRY_FEE_COINS : GAME_DEFAULTS.ENTRY_FEE_TON;
+      this.state.entryFee = fee;
+      this.state.pot = fee;
+      
+      this.state.winners = [];
 
-    this.broadcastNetwork({ type: 'ROOM_CREATE', room: roomInfo, obstacles: this.state.obstacles });
-    this.broadcast();
+      if (networkChannel) networkChannel.postMessage({ type: 'ROOM_CREATE', room: newRoomInfo });
+      
+      this.broadcast();
   }
 
   public joinRoom(roomId: string, player: Player) {
-    this.isHost = false;
-    this.state.roomId = roomId;
-    this.state.state = GameState.LOBBY;
-    this.state.players = {}; 
-    this.broadcastNetwork({ type: 'ROOM_JOIN', roomId, player });
+      // Проверка на клиенте, есть ли место
+      const room = this.state.roomsList.find(r => r.id === roomId);
+      if (room && room.playersCount >= room.maxPlayers) {
+          alert("Комната заполнена!");
+          return;
+      }
+
+      this.isHost = false;
+      this.state.roomId = roomId;
+      this.state.state = GameState.LOBBY;
+      this.state.players = {}; 
+      
+      if (networkChannel) networkChannel.postMessage({ type: 'ROOM_JOIN', roomId, player });
   }
 
   public leaveRoom() {
-    if (!this.state.roomId) return;
-    this.broadcastNetwork({ 
-      type: 'ROOM_LEAVE', 
-      roomId: this.state.roomId, 
-      playerId: this.myPlayerId 
-    });
-    this.state = this.getInitialState();
-    this.isHost = false;
-    this.stopGameLoop();
-    this.broadcast();
+      if (!this.state.roomId) return;
+      
+      const roomId = this.state.roomId;
+      const playerId = this.myPlayerId;
+
+      // Локальный сброс
+      this.state.roomId = null;
+      this.state.state = GameState.MENU;
+      this.state.players = {};
+      this.isHost = false;
+
+      // Уведомляем сеть
+      if (networkChannel) networkChannel.postMessage({ type: 'ROOM_LEAVE', roomId, playerId });
+      this.broadcast();
   }
 
-  // --- ИГРОВАЯ ЛОГИКА (АВТОРИТАРНАЯ) ---
+  // --- GAME LOGIC ---
 
   public startGame() {
     if (!this.isHost) return;
-    if (Object.keys(this.state.players).length < 1) return;
 
     this.state.state = GameState.PLAYING;
     this.state.light = LightColor.RED;
     this.state.timeRemaining = 3000;
+    this.lastUpdate = Date.now();
+    this.lastLightSwitchTime = Date.now() - 10000; 
+    
+    // Обновляем статус комнаты в списке
+    const roomIdx = this.state.roomsList.findIndex(r => r.id === this.state.roomId);
+    if(roomIdx !== -1) {
+        this.state.roomsList[roomIdx].status = 'PLAYING';
+    }
+
     this.runGameLoop();
     this.broadcastNetwork({ type: 'GAME_START', roomId: this.state.roomId! });
     this.broadcast();
   }
 
-  private runGameLoop() {
+  public playerMove(playerId: string, dx: number, dz: number) {
+    if (this.state.state !== GameState.PLAYING) return;
+
+    if (!this.isHost) {
+        this.applyMove(playerId, dx, dz); 
+        this.broadcast(); 
+        
+        if (this.state.roomId && networkChannel) {
+            networkChannel.postMessage({ type: 'PLAYER_MOVE', roomId: this.state.roomId, playerId, x: dx, z: dz });
+        }
+        return;
+    }
+
+    this.applyMove(playerId, dx, dz);
+    this.broadcast();
+  }
+
+  private applyMove(playerId: string, dx: number, dz: number) {
+    const player = this.state.players[playerId];
+    if (!player || player.isEliminated || player.hasFinished) return;
+
+    if (this.isHost && this.state.light === LightColor.RED) {
+        const timeSinceRed = Date.now() - this.lastLightSwitchTime;
+        if (timeSinceRed > this.GRACE_PERIOD_MS) {
+            if (dx !== 0 || dz !== 0) {
+              this.eliminatePlayer(playerId, 'MOVEMENT');
+              return;
+            }
+        }
+    }
+
+    if (dx !== 0 || dz !== 0) {
+      let moveX = dx * GAME_DEFAULTS.PLAYER_SPEED;
+      let moveZ = dz * GAME_DEFAULTS.PLAYER_SPEED;
+
+      let newX = player.x + moveX;
+      let newZ = player.z + moveZ;
+
+      const boundary = this.state.config.fieldWidth / 2 - 1;
+      if (newX > boundary) newX = boundary;
+      if (newX < -boundary) newX = -boundary;
+
+      this.state.players[playerId].x = newX;
+      this.state.players[playerId].z = newZ;
+
+      if (this.isHost && newZ >= this.state.config.fieldLength) {
+        this.finishPlayer(playerId);
+      }
+    }
+  }
+
+  public reset() {
+    if (!this.isHost) return;
     this.stopGameLoop();
-    this.lastUpdate = Date.now();
-    this.loopId = setInterval(() => this.update(), 1000 / GAME_DEFAULTS.TICK_RATE);
+    
+    Object.keys(this.state.players).forEach(key => {
+        this.state.players[key].x = (Math.random() - 0.5) * (this.state.config.fieldWidth - 10);
+        this.state.players[key].z = Math.random() * -2;
+        this.state.players[key].isEliminated = false;
+        this.state.players[key].hasFinished = false;
+        this.state.players[key].deathReason = undefined;
+    });
+
+    this.state.state = GameState.LOBBY;
+    this.state.winners = [];
+    this.state.pot = Object.keys(this.state.players).length * this.state.entryFee;
+    
+    // Сброс статуса комнаты
+    const roomIdx = this.state.roomsList.findIndex(r => r.id === this.state.roomId);
+    if(roomIdx !== -1) {
+        this.state.roomsList[roomIdx].status = 'WAITING';
+    }
+
+    this.broadcastNetwork({ type: 'GAME_RESET', roomId: this.state.roomId! });
+    this.broadcast();
+  }
+
+  // --- NETWORK HANDLING ---
+
+  private handleNetworkMessage(msg: NetworkMessage) {
+      switch(msg.type) {
+          case 'ROOM_CREATE':
+              if (!this.state.roomsList.find(r => r.id === msg.room.id)) {
+                  this.state.roomsList = [...this.state.roomsList, msg.room];
+                  this.broadcast();
+              }
+              break;
+
+          case 'ROOM_JOIN':
+              if (this.isHost && this.state.roomId === msg.roomId) {
+                  this.state.players[msg.player.id] = { ...msg.player, isHost: false };
+                  this.state.pot += this.state.entryFee;
+                  
+                  // Обновляем счетчик в списке (локально у хоста, потом расшарится)
+                  const r = this.state.roomsList.find(rm => rm.id === this.state.roomId);
+                  if (r) r.playersCount++;
+
+                  this.broadcast();
+              }
+              break;
+
+          case 'ROOM_LEAVE':
+              if (this.isHost && this.state.roomId === msg.roomId) {
+                  delete this.state.players[msg.playerId];
+                  this.state.pot -= this.state.entryFee;
+                  const r = this.state.roomsList.find(rm => rm.id === this.state.roomId);
+                  if (r) r.playersCount--;
+                  this.broadcast();
+              }
+              // Если это клиент, и комната, в которой он был, обновилась (например, ушли другие)
+              if (!this.isHost && this.state.roomId !== msg.roomId) {
+                 // Обновление счетчиков в списке комнат
+                 const r = this.state.roomsList.find(rm => rm.id === msg.roomId);
+                 if (r && r.playersCount > 0) r.playersCount--;
+                 this.broadcast();
+              }
+              break;
+
+          case 'PLAYER_MOVE':
+              if (this.isHost && this.state.roomId === msg.roomId) {
+                  this.applyMove(msg.playerId, msg.x, msg.z);
+              }
+              break;
+
+          case 'STATE_UPDATE':
+              if (!this.isHost && this.state.roomId === msg.roomId) {
+                  this.state = { ...this.state, ...msg.partialState };
+                  // Особое внимание конфигу, он должен синхронизироваться
+                  if (msg.partialState.config) {
+                      this.state.config = msg.partialState.config;
+                  }
+                  this.broadcast();
+              }
+              break;
+            
+          case 'GAME_START':
+              if (!this.isHost && this.state.roomId === msg.roomId) {
+                  this.state.state = GameState.PLAYING;
+                  this.broadcast();
+              }
+              break;
+            
+          case 'GAME_RESET':
+             if (!this.isHost && this.state.roomId === msg.roomId) {
+                  this.state.state = GameState.LOBBY;
+                  this.broadcast();
+              }
+              break;
+      }
+  }
+
+  private broadcastNetwork(msg: NetworkMessage) {
+      if (networkChannel) networkChannel.postMessage(msg);
+  }
+
+  // --- HOST LOGIC ---
+
+  private eliminatePlayer(playerId: string, reason: 'MOVEMENT' | 'OBSTACLE' = 'OBSTACLE') {
+    if (this.state.players[playerId].isEliminated) return;
+    this.state.players[playerId].isEliminated = true;
+    this.state.players[playerId].deathReason = reason;
+    this.broadcast();
+  }
+
+  private finishPlayer(playerId: string) {
+    if (this.state.winners.length >= GAME_DEFAULTS.MAX_WINNERS) {
+        this.eliminatePlayer(playerId, 'OBSTACLE'); 
+        return;
+    }
+
+    this.state.players[playerId].hasFinished = true;
+    this.state.players[playerId].z = this.state.config.fieldLength;
+    this.state.players[playerId].finishTime = Date.now();
+    this.state.winners.push(playerId);
+    this.broadcast();
+  }
+
+  private runGameLoop() {
+    this.loopId = setInterval(() => {
+      this.update(1000 / GAME_DEFAULTS.TICK_RATE);
+    }, 1000 / GAME_DEFAULTS.TICK_RATE);
   }
 
   private stopGameLoop() {
     if (this.loopId) clearInterval(this.loopId);
-    this.loopId = null;
   }
 
-  private update() {
-    if (this.state.state !== GameState.PLAYING || !this.isHost) return;
+  private update(dt: number) {
+    if (this.state.state !== GameState.PLAYING) return;
 
     const now = Date.now();
     const delta = now - this.lastUpdate;
     this.lastUpdate = now;
 
     this.state.timeRemaining -= delta;
-    if (this.state.timeRemaining <= 0) this.switchLight();
+
+    if (this.state.timeRemaining <= 0) {
+      this.switchLight();
+    }
 
     // Движение препятствий
     this.state.obstacles.forEach(obs => {
-      if (obs.type === 'SAW') {
-        obs.x += obs.speed * obs.direction * (delta / 1000) * 4;
-        const limit = this.state.config.fieldWidth / 2 - 2;
-        if (obs.x > limit) { obs.x = limit; obs.direction = -1; }
-        else if (obs.x < -limit) { obs.x = -limit; obs.direction = 1; }
-      }
+        if (obs.type === 'SAW') {
+            obs.x += obs.speed * obs.direction * (delta / 1000) * 4;
+            const limit = this.state.config.fieldWidth / 2 - 2;
+            if (obs.x > limit) { obs.x = limit; obs.direction = -1; } 
+            else if (obs.x < -limit) { obs.x = -limit; obs.direction = 1; }
+        } else if (obs.type === 'BALL') {
+            obs.z -= obs.speed * (delta / 1000) * 4;
+            if (obs.z < -20) {
+                obs.z = this.state.config.fieldLength + 20;
+                obs.x = (Math.random() * (this.state.config.fieldWidth - 6)) - ((this.state.config.fieldWidth - 6) / 2);
+            }
+        }
     });
 
-    // Коллизии и проверка финиша
     Object.values(this.state.players).forEach(p => {
       if (p.isEliminated || p.hasFinished) return;
-      
-      // Коллизии
+
       for (const obs of this.state.obstacles) {
         const dist = Math.sqrt(Math.pow(p.x - obs.x, 2) + Math.pow(p.z - obs.z, 2));
-        if (dist < obs.radius) {
-          this.eliminatePlayer(p.id, 'OBSTACLE');
+        const hitRadius = obs.type === 'BALL' ? obs.radius - 0.5 : obs.radius + 0.4;
+        
+        if (dist < hitRadius) {
+            this.eliminatePlayer(p.id, 'OBSTACLE'); 
+            break;
         }
       }
-
-      // Финиш
-      if (p.z >= this.state.config.fieldLength) {
-        this.finishPlayer(p.id);
-      }
     });
 
-    // Проверка завершения матча
     const activePlayers = Object.values(this.state.players).filter(p => !p.isEliminated && !p.hasFinished);
-    if (activePlayers.length === 0 && Object.keys(this.state.players).length > 0) {
+    const allFinishedOrDead = Object.values(this.state.players).every(p => p.isEliminated || p.hasFinished);
+    
+    if (Object.keys(this.state.players).length > 0 && allFinishedOrDead) {
       this.endGame();
     }
-
-    // Рассылка состояния
-    this.broadcastNetwork({
-      type: 'STATE_UPDATE',
-      roomId: this.state.roomId!,
-      partialState: {
-        players: this.state.players,
-        obstacles: this.state.obstacles,
-        light: this.state.light,
-        timeRemaining: this.state.timeRemaining,
-        state: this.state.state,
-        winners: this.state.winners,
-        pot: this.state.pot
-      }
-    });
+    
+    if (this.isHost && this.state.roomId) {
+        this.broadcastNetwork({ 
+            type: 'STATE_UPDATE', 
+            roomId: this.state.roomId, 
+            partialState: {
+                players: this.state.players,
+                obstacles: this.state.obstacles,
+                light: this.state.light,
+                timeRemaining: this.state.timeRemaining,
+                state: this.state.state,
+                winners: this.state.winners,
+                winAmount: this.state.winAmount,
+                config: this.state.config, // Важно слать конфиг, чтобы клиенты знали длину карты
+                pot: this.state.pot // Include pot for clients
+            }
+        });
+    }
+    
     this.broadcast();
   }
 
   private switchLight() {
     this.lastLightSwitchTime = Date.now();
-    const isRed = this.state.light === LightColor.RED;
-    this.state.light = isRed ? LightColor.GREEN : LightColor.RED;
-    this.state.timeRemaining = isRed ? (3000 + Math.random() * 2000) : (2000 + Math.random() * 1500);
-  }
-
-  public playerMove(playerId: string, dx: number, dz: number) {
-    if (this.state.state !== GameState.PLAYING) return;
-    if (!this.isHost) {
-      this.broadcastNetwork({ type: 'PLAYER_MOVE', roomId: this.state.roomId!, playerId, x: dx, z: dz });
-    } else {
-      this.applyMove(playerId, dx, dz);
-    }
-  }
-
-  private applyMove(playerId: string, dx: number, dz: number) {
-    const p = this.state.players[playerId];
-    if (!p || p.isEliminated || p.hasFinished) return;
-
-    // Проверка Красного Света
-    if (this.state.light === LightColor.RED) {
-      const grace = Date.now() - this.lastLightSwitchTime;
-      if (grace > this.GRACE_PERIOD_MS && (dx !== 0 || dz !== 0)) {
-        this.eliminatePlayer(playerId, 'MOVEMENT');
-        return;
-      }
-    }
-
-    p.x += dx * GAME_DEFAULTS.PLAYER_SPEED;
-    p.z += dz * GAME_DEFAULTS.PLAYER_SPEED;
+    // Хардкор: меньше времени на бег, быстрее светофор
+    let greenTime = 3000;
+    let redTime = 2500;
     
-    // Ограничение границ
-    const bound = this.state.config.fieldWidth / 2 - 1;
-    p.x = Math.max(-bound, Math.min(bound, p.x));
-  }
-
-  private eliminatePlayer(pid: string, reason: 'MOVEMENT' | 'OBSTACLE') {
-    if (this.state.players[pid]) {
-      this.state.players[pid].isEliminated = true;
-      this.state.players[pid].deathReason = reason;
+    if (this.state.config.difficulty === Difficulty.HARD) {
+        greenTime = 2000;
+        redTime = 2000;
     }
-  }
 
-  private finishPlayer(pid: string) {
-    if (!this.state.winners.includes(pid)) {
-      this.state.players[pid].hasFinished = true;
-      this.state.winners.push(pid);
+    if (this.state.light === LightColor.RED) {
+      this.state.light = LightColor.GREEN;
+      this.state.timeRemaining = greenTime + Math.random() * 2000; 
+    } else {
+      this.state.light = LightColor.RED;
+      this.state.timeRemaining = redTime + Math.random() * 2000;
     }
   }
 
   private endGame() {
     this.state.state = GameState.FINISHED;
-    const count = this.state.winners.length;
-    this.state.winAmount = count > 0 ? Math.floor(this.state.pot / count) : 0;
+    const survivors = this.state.winners.length;
+    const winAmount = survivors > 0 
+        ? Math.floor(this.state.pot / survivors) 
+        : 0;
+    
+    this.state.winAmount = winAmount;
     this.stopGameLoop();
-  }
-
-  // --- СЕТЕВАЯ ОБРАБОТКА ---
-
-  private handleNetworkMessage(msg: NetworkMessage) {
-    switch (msg.type) {
-      case 'ROOM_QUERY':
-        if (this.isHost && this.state.roomId) {
-          const r = this.state.roomsList.find(rm => rm.id === this.state.roomId);
-          if (r) this.broadcastNetwork({ type: 'ROOM_CREATE', room: r, obstacles: this.state.obstacles });
-        }
-        break;
-      case 'ROOM_CREATE':
-        if (!this.state.roomsList.find(r => r.id === msg.room.id)) {
-          this.state.roomsList = [...this.state.roomsList, msg.room];
-          this.broadcast();
-        }
-        break;
-      case 'ROOM_JOIN':
-        if (this.isHost && this.state.roomId === msg.roomId) {
-          this.state.players[msg.player.id] = { ...msg.player, isHost: false };
-          this.state.pot += this.state.entryFee;
-          this.lastSeen.set(msg.player.id, Date.now());
-          this.broadcast();
-        }
-        break;
-      case 'HEARTBEAT':
-        if (this.isHost && this.state.roomId === msg.roomId) {
-          this.lastSeen.set(msg.playerId, Date.now());
-        }
-        break;
-      case 'PLAYER_MOVE':
-        if (this.isHost && this.state.roomId === msg.roomId) {
-          this.applyMove(msg.playerId, msg.x, msg.z);
-        }
-        break;
-      case 'STATE_UPDATE':
-        if (!this.isHost && this.state.roomId === msg.roomId) {
-          this.state = { ...this.state, ...msg.partialState };
-          this.broadcast();
-        }
-        break;
-      case 'GAME_START':
-        if (!this.isHost && this.state.roomId === msg.roomId) {
-          this.state.state = GameState.PLAYING;
-          this.broadcast();
-        }
-        break;
-    }
-  }
-
-  private broadcastNetwork(msg: NetworkMessage) {
-    networkChannel.postMessage(msg);
   }
 
   public subscribe(listener: (state: GameSchema) => void) {
     this.listeners.push(listener);
     listener(this.state);
-    return () => { this.listeners = this.listeners.filter(l => l !== listener); };
+    return () => {
+      this.listeners = this.listeners.filter(l => l !== listener);
+    };
   }
 
   private broadcast() {
-    this.listeners.forEach(l => l({ ...this.state }));
-  }
-
-  private generateObstacles(len: number, wid: number, diff: Difficulty): Obstacle[] {
-    const obs: Obstacle[] = [];
-    // Простая генерация для примера (можно расширить как в предыдущем коде)
-    for(let z = 20; z < len - 10; z += 30) {
-      obs.push({
-        id: `saw_${z}`, type: 'SAW', x: 0, z, radius: 2, speed: 5, direction: 1
-      });
-    }
-    return obs;
+    this.state = { ...this.state }; 
+    this.listeners.forEach(l => l(this.state));
   }
 }
 
