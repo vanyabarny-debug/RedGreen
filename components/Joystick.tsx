@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
 interface JoystickProps {
   onMove: (x: number, y: number) => void;
@@ -7,29 +7,30 @@ interface JoystickProps {
 export const Joystick: React.FC<JoystickProps> = ({ onMove }) => {
   const [active, setActive] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [origin, setOrigin] = useState({ x: 0, y: 0 });
   
-  const joystickRadius = 50; 
-  const handleRadius = 25;
+  // Increased radius for better precision on mobile
+  const joystickRadius = 60; 
 
-  const handleStart = (clientX: number, clientY: number, target: EventTarget) => {
+  const handleStart = (clientX: number, clientY: number) => {
     setActive(true);
+    setOrigin({ x: clientX, y: clientY });
+    setPosition({ x: 0, y: 0 });
+    onMove(0, 0);
   };
 
-  const handleMove = (clientX: number, clientY: number, currentTarget: HTMLElement) => {
+  const handleMove = (clientX: number, clientY: number) => {
     if (!active) return;
 
-    const rect = currentTarget.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-
-    const dx = clientX - centerX;
-    const dy = clientY - centerY;
+    const dx = clientX - origin.x;
+    const dy = clientY - origin.y;
     
     const distance = Math.sqrt(dx * dx + dy * dy);
     
     let normalizedX = dx;
     let normalizedY = dy;
 
+    // Clamp to radius
     if (distance > joystickRadius) {
       const angle = Math.atan2(dy, dx);
       normalizedX = Math.cos(angle) * joystickRadius;
@@ -38,9 +39,16 @@ export const Joystick: React.FC<JoystickProps> = ({ onMove }) => {
 
     setPosition({ x: normalizedX, y: normalizedY });
 
-    // Нормализация -1..1
+    // OUTPUT CALCULATION
+    // X: Left (-1) to Right (1) -> Standard
+    // Y: Down (1) to Up (-1) on screen -> needs to be inverted for 3D Forward (Positive Z)
+    
     const xInput = normalizedX / joystickRadius;
-    const yInput = -(normalizedY / joystickRadius); // Инверсия Y для 3D
+    
+    // IMPORTANT: In our game, Forward is Positive Z.
+    // Dragging UP (negative pixel dy) should produce Positive Z.
+    // Dragging DOWN (positive pixel dy) should produce Negative Z.
+    const yInput = -(normalizedY / joystickRadius); 
 
     onMove(xInput, yInput);
   };
@@ -52,34 +60,36 @@ export const Joystick: React.FC<JoystickProps> = ({ onMove }) => {
   };
 
   return (
-    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center">
-        {/* Визуальная зона джойстика */}
+    <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-50 select-none touch-none">
+        {/* Joystick Zone */}
         <div 
-            className="relative w-32 h-32 rounded-full bg-white/10 backdrop-blur-md border border-white/20 touch-none shadow-2xl"
-            onTouchStart={(e) => handleStart(e.touches[0].clientX, e.touches[0].clientY, e.currentTarget)}
-            onTouchMove={(e) => handleMove(e.touches[0].clientX, e.touches[0].clientY, e.currentTarget)}
+            className="relative w-40 h-40 rounded-full bg-white/5 backdrop-blur-sm border-2 border-white/10 shadow-2xl flex items-center justify-center"
+            onTouchStart={(e) => handleStart(e.touches[0].clientX, e.touches[0].clientY)}
+            onTouchMove={(e) => handleMove(e.touches[0].clientX, e.touches[0].clientY)}
             onTouchEnd={handleEnd}
-            // Mouse events for testing on PC
-            onMouseDown={(e) => handleStart(e.clientX, e.clientY, e.currentTarget)}
-            onMouseMove={(e) => handleMove(e.clientX, e.clientY, e.currentTarget)}
+            // Mouse fallbacks for testing
+            onMouseDown={(e) => handleStart(e.clientX, e.clientY)}
+            onMouseMove={(e) => active && handleMove(e.clientX, e.clientY)}
             onMouseUp={handleEnd}
             onMouseLeave={handleEnd}
         >
-            {/* Ручка джойстика */}
+            {/* Center Decor */}
+            <div className="absolute w-2 h-2 bg-white/20 rounded-full" />
+
+            {/* Stick */}
             <div 
-                className={`absolute w-16 h-16 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-lg transition-transform duration-75 ${active ? 'scale-95' : 'scale-100'}`}
+                className={`absolute w-16 h-16 rounded-full shadow-lg transition-transform duration-75 
+                ${active ? 'bg-emerald-500 scale-90' : 'bg-white/20 scale-100'}`}
                 style={{
-                    left: '50%',
-                    top: '50%',
-                    marginTop: -32, // половина высоты
-                    marginLeft: -32, // половина ширины
                     transform: `translate(${position.x}px, ${position.y}px)`
                 }}
-            />
+            >
+                <div className="w-full h-full rounded-full bg-gradient-to-br from-white/40 to-transparent" />
+            </div>
         </div>
-        <span className="mt-2 text-xs font-bold text-white/50 uppercase tracking-widest pointer-events-none">
-            Управление
-        </span>
+        <div className="text-center mt-4 text-[10px] text-white/40 font-bold uppercase tracking-widest">
+            ДЖОЙСТИК
+        </div>
     </div>
   );
 };
