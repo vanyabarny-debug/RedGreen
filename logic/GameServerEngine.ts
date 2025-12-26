@@ -44,7 +44,7 @@ export class GameServerEngine {
       timeRemaining: 0,
       players: {},
       obstacles: [],
-      entryFee: GAME_DEFAULTS.ENTRY_FEE,
+      entryFee: GAME_DEFAULTS.ENTRY_FEE_COINS,
       pot: 0,
       winners: [],
       winAmount: 0,
@@ -126,7 +126,8 @@ export class GameServerEngine {
           playersCount: 1,
           maxPlayers: settings.maxPlayers,
           difficulty: settings.difficulty,
-          status: 'WAITING'
+          status: 'WAITING',
+          isTraining: settings.isTraining
       };
 
       this.isHost = true;
@@ -142,7 +143,11 @@ export class GameServerEngine {
 
       this.state.obstacles = this.generateObstacles(settings.length, 60, settings.difficulty);
       this.state.players = { [hostPlayer.id]: { ...hostPlayer, isHost: true } };
-      this.state.pot = GAME_DEFAULTS.ENTRY_FEE;
+      
+      const fee = settings.isTraining ? GAME_DEFAULTS.ENTRY_FEE_COINS : GAME_DEFAULTS.ENTRY_FEE_TON;
+      this.state.entryFee = fee;
+      this.state.pot = fee;
+      
       this.state.winners = [];
 
       networkChannel.postMessage({ type: 'ROOM_CREATE', room: newRoomInfo });
@@ -270,7 +275,7 @@ export class GameServerEngine {
 
     this.state.state = GameState.LOBBY;
     this.state.winners = [];
-    this.state.pot = Object.keys(this.state.players).length * GAME_DEFAULTS.ENTRY_FEE;
+    this.state.pot = Object.keys(this.state.players).length * this.state.entryFee;
     
     // Сброс статуса комнаты
     const roomIdx = this.state.roomsList.findIndex(r => r.id === this.state.roomId);
@@ -296,7 +301,7 @@ export class GameServerEngine {
           case 'ROOM_JOIN':
               if (this.isHost && this.state.roomId === msg.roomId) {
                   this.state.players[msg.player.id] = { ...msg.player, isHost: false };
-                  this.state.pot += GAME_DEFAULTS.ENTRY_FEE;
+                  this.state.pot += this.state.entryFee;
                   
                   // Обновляем счетчик в списке (локально у хоста, потом расшарится)
                   const r = this.state.roomsList.find(rm => rm.id === this.state.roomId);
@@ -309,7 +314,7 @@ export class GameServerEngine {
           case 'ROOM_LEAVE':
               if (this.isHost && this.state.roomId === msg.roomId) {
                   delete this.state.players[msg.playerId];
-                  this.state.pot -= GAME_DEFAULTS.ENTRY_FEE;
+                  this.state.pot -= this.state.entryFee;
                   const r = this.state.roomsList.find(rm => rm.id === this.state.roomId);
                   if (r) r.playersCount--;
                   this.broadcast();
@@ -454,7 +459,8 @@ export class GameServerEngine {
                 state: this.state.state,
                 winners: this.state.winners,
                 winAmount: this.state.winAmount,
-                config: this.state.config // Важно слать конфиг, чтобы клиенты знали длину карты
+                config: this.state.config, // Важно слать конфиг, чтобы клиенты знали длину карты
+                pot: this.state.pot // Include pot for clients
             }
         });
     }
