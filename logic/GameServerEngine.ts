@@ -1,12 +1,14 @@
 import { GameSchema, GameState, LightColor, Player, Obstacle, GAME_DEFAULTS, RoomInfo, Difficulty, MapLength, RoomSettings } from '../types';
 
 // Safely initialize BroadcastChannel. 
-// Some Telegram WebViews block this or throw errors, causing the app to fail at startup.
+// CRITICAL FIX: Check existence before instantiation to prevent ReferenceError on older/strict WebViews.
 let networkChannel: BroadcastChannel | null = null;
-try {
-    networkChannel = new BroadcastChannel('game_channel');
-} catch (e) {
-    console.warn("BroadcastChannel not supported in this environment. Multiplayer sync locally might be limited.", e);
+if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    try {
+        networkChannel = new BroadcastChannel('game_channel');
+    } catch (e) {
+        console.warn("BroadcastChannel failed to initialize. Multiplayer sync locally will be limited.", e);
+    }
 }
 
 type NetworkMessage = 
