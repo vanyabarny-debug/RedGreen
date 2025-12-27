@@ -3,14 +3,19 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { TonConnectUIProvider } from '@tonconnect/ui-react';
 
-const MANIFEST_URL = 'https://red-green-gray.vercel.app/tonconnect-manifest.json';
-
 const rootElement = document.getElementById('root');
-if (rootElement) {
-  const root = ReactDOM.createRoot(rootElement);
-  root.render(
+if (!rootElement) {
+  throw new Error("Could not find root element to mount to");
+}
+
+// Manifest URL required for TON Connect
+const MANIFEST_URL = 'https://raw.githubusercontent.com/ton-community/tutorials/main/03-client/test/public/tonconnect-manifest.json';
+
+const root = ReactDOM.createRoot(rootElement);
+root.render(
+  <React.StrictMode>
     <TonConnectUIProvider manifestUrl={MANIFEST_URL}>
       <App />
     </TonConnectUIProvider>
-  );
-}
+  </React.StrictMode>
+);
