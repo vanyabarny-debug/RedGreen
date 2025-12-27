@@ -23,20 +23,19 @@ export enum MapLength {
 }
 
 export type Language = 'RU' | 'EN';
-export type CurrencyType = 'TON' | 'COINS';
 
 export interface GameHistoryItem {
   timestamp: number;
   outcome: 'WIN' | 'LOSS';
-  amount: number; // Чистая прибыль/убыток (например, +0.9 или -1.0)
-  currency: CurrencyType;
+  amount: number; // Net amount (e.g. +200 or -100)
+  currency: 'TON' | 'COINS';
 }
 
 export interface UserProfile {
   id: string;
   username: string;
-  tonBalance: number; // Реальный баланс из TON кошелька/базы
-  coins: number;      // Виртуальные монеты (localStorage)
+  tonBalance: number; // Real TON Balance
+  coins: number;      // Virtual Currency
   walletAddress?: string;
   avatarColor: string;
   language: Language;
@@ -80,7 +79,6 @@ export interface RoomSettings {
   length: MapLength;
   maxPlayers: number;
   isTraining: boolean; 
-  currency: CurrencyType; // Добавлено: какую валюту принимает комната
 }
 
 export interface RoomInfo {
@@ -92,8 +90,6 @@ export interface RoomInfo {
   difficulty: Difficulty;
   status: 'WAITING' | 'PLAYING';
   isTraining: boolean;
-  entryFee: number;      // Добавлено: стоимость входа для конкретной комнаты
-  currency: CurrencyType; // Добавлено: тип валюты для отображения в списке
 }
 
 export interface DynamicGameConfig {
@@ -110,7 +106,6 @@ export interface GameSchema {
   players: Record<string, Player>;
   obstacles: Obstacle[];
   entryFee: number;
-  currency: CurrencyType; // Добавлено: текущий тип валюты игры
   pot: number;
   winners: string[];
   winAmount: number;
@@ -121,8 +116,8 @@ export interface GameSchema {
 export const GAME_DEFAULTS = {
   PLAYER_SPEED: 0.35, 
   TICK_RATE: 60,
-  ENTRY_FEE_TON: 1.0,  // 1 TON
-  ENTRY_FEE_COINS: 100, // 100 Coins
+  ENTRY_FEE_TON: 1.0, 
+  ENTRY_FEE_COINS: 100,
   INITIAL_COINS: 1000, 
   MAX_WINNERS: 20,
   ZONE_TOLERANCE: 0.5,
