@@ -170,19 +170,19 @@ const StatsCard = ({ history, currency, t }: { history: GameHistoryItem[], curre
     return (
         <div className="bg-black/40 border border-white/5 rounded-xl p-3 md:p-4 w-full">
             <p className="text-[10px] md:text-xs text-gray-400 uppercase font-bold mb-2 border-b border-white/5 pb-1 flex items-center justify-between">
-                <span>{t.stats}</span>
+                <span>{t?.stats || 'Stats'}</span>
                 <span className="text-[9px] md:text-[10px] bg-white/10 px-1.5 py-0.5 rounded">{currency}</span>
             </p>
             <div className="grid grid-cols-2 gap-2 mb-2">
                 <div className="flex flex-col items-center p-1.5 bg-white/5 rounded-lg">
-                     <span className="text-[9px] md:text-[10px] text-gray-400 mb-0.5">{t.winRate}</span>
+                     <span className="text-[9px] md:text-[10px] text-gray-400 mb-0.5">{t?.winRate || 'Win Rate'}</span>
                      <div className="flex items-center gap-1 text-white font-mono font-bold text-sm md:text-base">
                         <Percent className="w-3 h-3 md:w-4 md:h-4 text-yellow-400" />
                         {winRate}%
                      </div>
                 </div>
                 <div className="flex flex-col items-center p-1.5 bg-white/5 rounded-lg">
-                     <span className="text-[9px] md:text-[10px] text-gray-400 mb-0.5">{t.netPnl}</span>
+                     <span className="text-[9px] md:text-[10px] text-gray-400 mb-0.5">{t?.netPnl || 'Net PnL'}</span>
                      <div className={`flex items-center gap-1 font-mono font-bold text-sm md:text-base ${netPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                         {netPnL >= 0 ? <TrendingUp className="w-3 h-3 md:w-4 md:h-4"/> : <TrendingDown className="w-3 h-3 md:w-4 md:h-4"/>}
                         {netPnL > 0 ? '+' : ''}{netPnL.toFixed(currency === 'TON' ? 2 : 0)}
@@ -191,9 +191,9 @@ const StatsCard = ({ history, currency, t }: { history: GameHistoryItem[], curre
             </div>
             
             <div className="space-y-1">
-                <p className="text-[9px] md:text-[10px] text-gray-500 uppercase font-bold mb-1">{t.history}</p>
+                <p className="text-[9px] md:text-[10px] text-gray-500 uppercase font-bold mb-1">{t?.history || 'History'}</p>
                 {relevantHistory.length === 0 ? (
-                    <p className="text-center text-[10px] md:text-xs text-gray-600 italic py-1">{t.emptyHistory}</p>
+                    <p className="text-center text-[10px] md:text-xs text-gray-600 italic py-1">{t?.emptyHistory || 'Empty'}</p>
                 ) : (
                     <div className="max-h-24 md:max-h-32 overflow-y-auto space-y-1 pr-1 scrollbar-thin scrollbar-thumb-white/10">
                         {relevantHistory.slice().reverse().map((item, idx) => {
@@ -225,7 +225,8 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
   const totalAlive = activePlayers.length + finishedPlayers.length;
   
   const lang = userProfile.language;
-  const t = TRANSLATIONS[lang];
+  // SAFEGUARD: Ensure t is never undefined
+  const t = TRANSLATIONS[lang] || TRANSLATIONS['EN'];
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -406,8 +407,8 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
                 >
                     <div className={`absolute top-1 bottom-1 w-1/2 rounded-full bg-gradient-to-r transition-all duration-300 ${isTrainingMode ? 'left-1 from-yellow-500 to-yellow-600' : 'left-[50%] from-[#0098EA] to-blue-600'}`}></div>
                     
-                    <div className={`z-10 w-1/2 text-center text-[10px] md:text-xs font-black uppercase tracking-wider ${isTrainingMode ? 'text-black' : 'text-gray-500'}`}>{t.training}</div>
-                    <div className={`z-10 w-1/2 text-center text-[10px] md:text-xs font-black uppercase tracking-wider ${!isTrainingMode ? 'text-white' : 'text-gray-500'}`}>{t.tonGame}</div>
+                    <div className={`z-10 w-1/2 text-center text-[10px] md:text-xs font-black uppercase tracking-wider ${isTrainingMode ? 'text-black' : 'text-gray-500'}`}>{t?.training}</div>
+                    <div className={`z-10 w-1/2 text-center text-[10px] md:text-xs font-black uppercase tracking-wider ${!isTrainingMode ? 'text-white' : 'text-gray-500'}`}>{t?.tonGame}</div>
                 </button>
              </div>
 
@@ -416,7 +417,7 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
                  <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4 animate-in fade-in zoom-in-95 duration-200">
                       <div className="bg-slate-800 p-6 md:p-8 rounded-2xl w-full max-w-sm md:max-w-md border border-white/10 flex flex-col max-h-[90vh]">
                           <div className="flex justify-between items-center mb-4">
-                              <h2 className="text-white text-xl font-bold">{t.profile}</h2>
+                              <h2 className="text-white text-xl font-bold">{t?.profile}</h2>
                               <button onClick={() => setShowProfile(false)} className="text-white hover:text-red-400">✕</button>
                           </div>
                           
@@ -432,7 +433,7 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
                                     className="w-full bg-transparent border-b border-white/20 text-center text-xl font-bold text-white focus:border-emerald-500 outline-none pb-1 placeholder-gray-600"
                                     value={editName}
                                     onChange={handleNameChange}
-                                    placeholder={t.name}
+                                    placeholder={t?.name}
                                   />
                               </div>
 
@@ -440,16 +441,16 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
 
                               <div className="bg-black/30 p-4 rounded-xl space-y-3">
                                   <div className="flex justify-between items-center">
-                                    <span className="text-xs text-gray-400 uppercase font-bold">{t.tonBal}</span>
+                                    <span className="text-xs text-gray-400 uppercase font-bold">{t?.tonBal}</span>
                                     <span className="text-xl font-mono text-white font-bold flex items-center gap-2"><TonIcon className="w-5 h-5" /> {userProfile.tonBalance.toFixed(2)}</span>
                                   </div>
                                   <div className="flex justify-between items-center">
-                                    <span className="text-xs text-gray-400 uppercase font-bold">{t.coinsBal}</span>
+                                    <span className="text-xs text-gray-400 uppercase font-bold">{t?.coinsBal}</span>
                                     <span className="text-xl font-mono text-yellow-400 font-bold flex items-center gap-2"><CoinIcon className="w-5 h-5 text-xs" /> {userProfile.coins}</span>
                                   </div>
                                   <button onClick={handleDeposit} disabled={isProcessing || !wallet} className="w-full bg-[#0098EA] hover:bg-[#0098EA]/80 disabled:opacity-50 text-white py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2">
                                       {isProcessing ? <Loader2 className="w-4 h-4 animate-spin"/> : <ArrowDownCircle className="w-4 h-4" />} 
-                                      {wallet ? t.deposit : t.connect}
+                                      {wallet ? t?.deposit : t?.connect}
                                   </button>
                               </div>
                               <StatsCard history={userProfile.gameHistory || []} currency={isTrainingMode ? 'COINS' : 'TON'} t={t} />
@@ -463,48 +464,48 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
                  <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4 animate-in fade-in zoom-in-95 duration-200">
                      <div className="bg-slate-800 p-6 rounded-3xl w-full max-w-sm border border-emerald-500/30 shadow-2xl flex flex-col max-h-[90vh]">
                          <div className="flex justify-between items-center mb-4">
-                             <h2 className="text-lg font-black text-white flex items-center gap-2"><Plus className="text-emerald-500 w-5 h-5"/> {t.createGame}</h2>
+                             <h2 className="text-lg font-black text-white flex items-center gap-2"><Plus className="text-emerald-500 w-5 h-5"/> {t?.createGame}</h2>
                              <button onClick={() => setShowCreateRoom(false)} className="text-gray-400 hover:text-white"><X className="w-5 h-5"/></button>
                          </div>
                          <div className="space-y-4 overflow-y-auto pr-1">
                              <div>
-                                 <label className="text-xs text-gray-400 uppercase font-bold mb-1 ml-1">{t.name}</label>
+                                 <label className="text-xs text-gray-400 uppercase font-bold mb-1 ml-1">{t?.name}</label>
                                  <input className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/10 focus:border-emerald-500 outline-none text-sm" value={newRoomName} onChange={e => setNewRoomName(e.target.value)} />
                              </div>
                              <div>
                                  <label className="text-xs text-gray-400 uppercase font-bold mb-1 ml-1 flex justify-between">
-                                     <span>{t.players}</span>
+                                     <span>{t?.players}</span>
                                      <span className="text-emerald-400">{newRoomMaxPlayers}</span>
                                  </label>
                                  <input type="range" min="2" max="100" value={newRoomMaxPlayers} onChange={e => setNewRoomMaxPlayers(parseInt(e.target.value))} className="w-full accent-emerald-500 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" />
                              </div>
                              <div className="grid grid-cols-2 gap-3">
                                  <div>
-                                     <label className="text-xs text-gray-400 uppercase font-bold mb-1 ml-1">{t.diff}</label>
+                                     <label className="text-xs text-gray-400 uppercase font-bold mb-1 ml-1">{t?.diff}</label>
                                      <select value={newRoomDifficulty} onChange={e => setNewRoomDifficulty(e.target.value as Difficulty)} className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/10 outline-none appearance-none text-sm">
-                                         <option value={Difficulty.EASY}>{t.easy}</option>
-                                         <option value={Difficulty.MEDIUM}>{t.med}</option>
-                                         <option value={Difficulty.HARD}>{t.hard}</option>
+                                         <option value={Difficulty.EASY}>{t?.easy}</option>
+                                         <option value={Difficulty.MEDIUM}>{t?.med}</option>
+                                         <option value={Difficulty.HARD}>{t?.hard}</option>
                                      </select>
                                  </div>
                                  <div>
-                                     <label className="text-xs text-gray-400 uppercase font-bold mb-1 ml-1">{t.len}</label>
+                                     <label className="text-xs text-gray-400 uppercase font-bold mb-1 ml-1">{t?.len}</label>
                                      <select value={newRoomLength} onChange={e => setNewRoomLength(parseInt(e.target.value) as MapLength)} className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/10 outline-none appearance-none text-sm">
-                                         <option value={MapLength.SHORT}>{t.short}</option>
-                                         <option value={MapLength.MEDIUM}>{t.avg}</option>
-                                         <option value={MapLength.LONG}>{t.long}</option>
+                                         <option value={MapLength.SHORT}>{t?.short}</option>
+                                         <option value={MapLength.MEDIUM}>{t?.avg}</option>
+                                         <option value={MapLength.LONG}>{t?.long}</option>
                                      </select>
                                  </div>
                              </div>
                              <div className="pt-4 border-t border-white/10">
                                  <div className="flex justify-between text-xs mb-3">
-                                     <span className="text-gray-400">{t.entry}:</span>
+                                     <span className="text-gray-400">{t?.entry}:</span>
                                      <span className={isTrainingMode ? "text-yellow-400 font-bold" : "text-[#0098EA] font-bold"}>
                                         {isTrainingMode ? `${GAME_DEFAULTS.ENTRY_FEE_COINS} Coins` : `${GAME_DEFAULTS.ENTRY_FEE_TON} TON`}
                                      </span>
                                  </div>
                                  <button onClick={handleCreateRoom} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl shadow-lg active:scale-95 transition-transform uppercase tracking-wider text-sm">
-                                     {t.create}
+                                     {t?.create}
                                  </button>
                              </div>
                          </div>
@@ -536,8 +537,8 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
 
                 {/* Tabs */}
                 <div className="flex p-1 bg-black/20 rounded-xl mb-3 shrink-0">
-                    <button onClick={() => setActiveTab('ROOMS')} className={`flex-1 py-2 rounded-lg text-xs md:text-sm font-bold transition-all ${activeTab === 'ROOMS' ? 'bg-white/10 text-white shadow' : 'text-gray-500'}`}>{t.rooms}</button>
-                    <button onClick={() => setActiveTab('FRIENDS')} className={`flex-1 py-2 rounded-lg text-xs md:text-sm font-bold transition-all ${activeTab === 'FRIENDS' ? 'bg-white/10 text-white shadow' : 'text-gray-500'}`}>{t.friends}</button>
+                    <button onClick={() => setActiveTab('ROOMS')} className={`flex-1 py-2 rounded-lg text-xs md:text-sm font-bold transition-all ${activeTab === 'ROOMS' ? 'bg-white/10 text-white shadow' : 'text-gray-500'}`}>{t?.rooms}</button>
+                    <button onClick={() => setActiveTab('FRIENDS')} className={`flex-1 py-2 rounded-lg text-xs md:text-sm font-bold transition-all ${activeTab === 'FRIENDS' ? 'bg-white/10 text-white shadow' : 'text-gray-500'}`}>{t?.friends}</button>
                 </div>
 
                 {/* LIST CONTAINER - Explicitly handling overflow */}
@@ -546,9 +547,9 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
                         <>
                             {state.roomsList.filter(r => r.isTraining === isTrainingMode).length === 0 ? (
                                 <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 border-2 border-dashed border-white/5 rounded-xl m-1">
-                                    <p className="text-sm mb-1">{t.noRooms}</p>
+                                    <p className="text-sm mb-1">{t?.noRooms}</p>
                                     <span className="text-xs opacity-70">
-                                        {t.inputWait}: {isTrainingMode ? `${GAME_DEFAULTS.ENTRY_FEE_COINS} Coins` : `${GAME_DEFAULTS.ENTRY_FEE_TON} TON`}
+                                        {t?.inputWait}: {isTrainingMode ? `${GAME_DEFAULTS.ENTRY_FEE_COINS} Coins` : `${GAME_DEFAULTS.ENTRY_FEE_TON} TON`}
                                     </span>
                                 </div>
                             ) : (
@@ -594,7 +595,7 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
                                      </div>
                                      {friend.status === 'IN_GAME' && (
                                          <button className="bg-yellow-600/20 text-yellow-400 border border-yellow-600/50 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1">
-                                             <Swords className="w-3 h-3"/> {t.join}
+                                             <Swords className="w-3 h-3"/> {t?.join}
                                          </button>
                                      )}
                                  </div>
@@ -607,7 +608,7 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
                     onClick={() => setShowCreateRoom(true)}
                     className="w-full bg-[#0098EA] hover:bg-[#0098EA]/80 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform text-sm md:text-base shrink-0"
                 >
-                    <Plus className="w-5 h-5" /> {t.create}
+                    <Plus className="w-5 h-5" /> {t?.create}
                 </button>
              </div>
         </div>
@@ -622,10 +623,10 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
             <div className="w-full max-w-sm md:max-w-md bg-white/5 border border-white/10 rounded-3xl p-6 md:p-8 shadow-2xl flex flex-col h-[65vh]">
                 <div className="flex items-center justify-between mb-6 border-b border-white/10 pb-4">
                     <h2 className="text-xl font-black text-white flex items-center gap-2">
-                        <Users className="text-emerald-400 w-6 h-6" /> {t.lobby}
+                        <Users className="text-emerald-400 w-6 h-6" /> {t?.lobby}
                     </h2>
                     <button onClick={handleLeaveRoom} className="text-xs text-red-400 font-bold hover:bg-red-500/10 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1">
-                        <LogOut className="w-4 h-4"/> {t.exit}
+                        <LogOut className="w-4 h-4"/> {t?.exit}
                     </button>
                 </div>
 
@@ -643,16 +644,16 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
 
                 <div className="mt-auto pt-4 border-t border-white/10 text-center">
                      <div className="mb-4 text-sm font-mono text-gray-400">
-                        {t.pot}: {(state.pot).toFixed(2)} {isTrainingMode ? 'Coins' : 'TON'}
+                        {t?.pot}: {(state.pot).toFixed(2)} {isTrainingMode ? 'Coins' : 'TON'}
                      </div>
 
                      {isHost ? (
                          <button onClick={onStart} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl uppercase tracking-widest text-sm animate-pulse">
-                            {t.start}
+                            {t?.start}
                          </button>
                      ) : (
                          <div className="flex items-center justify-center gap-2 text-gray-500 text-sm">
-                            <Loader2 className="w-5 h-5 animate-spin" /> {t.waitHost}
+                            <Loader2 className="w-5 h-5 animate-spin" /> {t?.waitHost}
                          </div>
                      )}
                 </div>
@@ -670,12 +671,12 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
           {iWon ? (
             <>
               <Trophy className="w-20 h-20 mx-auto text-yellow-400 mb-6 animate-bounce" />
-              <h2 className="text-4xl font-black text-white mb-2">{t.win}</h2>
+              <h2 className="text-4xl font-black text-white mb-2">{t?.win}</h2>
             </>
           ) : (
             <>
               <Skull className="w-20 h-20 mx-auto text-red-500 mb-6" />
-              <h2 className="text-4xl font-black text-white mb-6">{t.eliminated}</h2>
+              <h2 className="text-4xl font-black text-white mb-6">{t?.eliminated}</h2>
             </>
           )}
           
@@ -684,7 +685,7 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
           </div>
 
           <button onClick={handleLeaveRoom} className="w-full bg-white text-black font-bold py-4 rounded-xl uppercase hover:bg-gray-200 text-lg">
-            {t.menu}
+            {t?.menu}
           </button>
         </div>
       </div>
@@ -698,7 +699,7 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
        {state.state === GameState.PLAYING && (
            <div className="portrait:flex hidden absolute top-32 left-1/2 -translate-x-1/2 z-20 items-center gap-2 bg-black/60 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/10 pointer-events-none animate-pulse">
                <RotateCcw className="w-3 h-3 text-yellow-400" />
-               <span className="text-[10px] font-bold text-white uppercase tracking-widest">{t.rotate}</span>
+               <span className="text-[10px] font-bold text-white uppercase tracking-widest">{t?.rotate}</span>
            </div>
        )}
 
@@ -715,13 +716,13 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
         {/* LEFT: POT */}
         <div className="flex flex-col gap-2">
             <div className="bg-black/60 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/10 shadow-lg flex flex-col min-w-[120px]">
-                <span className="text-[10px] text-gray-400 uppercase font-bold tracking-widest mb-1">{t.pot}</span>
+                <span className="text-[10px] text-gray-400 uppercase font-bold tracking-widest mb-1">{t?.pot}</span>
                 <div className="flex items-center gap-1.5">
                     {isTrainingMode ? <CoinIcon className="w-5 h-5 text-[10px]" /> : <TonIcon className="w-5 h-5" />}
                     <span className="text-2xl font-mono text-white font-bold tracking-tight">{state.pot.toFixed(1)}</span>
                 </div>
                 <div className="mt-2 border-t border-white/10 pt-1 flex items-center gap-1">
-                    <span className="text-[9px] text-gray-500 uppercase">{t.perPlayer}:</span>
+                    <span className="text-[9px] text-gray-500 uppercase">{t?.perPlayer}:</span>
                     <span className="text-xs font-mono font-bold text-emerald-400">+{potentialWin.toFixed(0)}</span>
                 </div>
             </div>
@@ -733,7 +734,7 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
             <div className={`px-8 py-2 md:px-12 md:py-3 rounded-full border border-white/10 backdrop-blur-md shadow-2xl flex items-center justify-center overflow-hidden z-10 transition-colors duration-200 ${state.light === LightColor.GREEN ? 'bg-emerald-900/80' : 'bg-red-900/80'}`}>
                 <div className={`absolute top-0 left-0 w-full h-1 ${state.light === LightColor.GREEN ? 'bg-emerald-500' : 'bg-red-500'} `} />
                 <h2 className={`text-3xl md:text-5xl font-black uppercase tracking-[0.2em] ${state.light === LightColor.GREEN ? 'text-emerald-400' : 'text-red-500 animate-pulse'}`}>
-                    {state.light === LightColor.GREEN ? t.run : t.stop}
+                    {state.light === LightColor.GREEN ? t?.run : t?.stop}
                 </h2>
             </div>
             
@@ -745,7 +746,7 @@ export const UI: React.FC<UIProps> = ({ state, playerId, userProfile, isTraining
 
         {/* RIGHT: ALIVE COUNT */}
         <div className="bg-black/60 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/10 text-right shadow-lg mr-12 md:mr-0">
-          <span className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">{t.alive}</span>
+          <span className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">{t?.alive}</span>
           <div className="text-2xl font-mono font-bold text-white mt-1">{totalAlive} <span className="text-sm text-gray-500">/ {players.length}</span></div>
         </div>
       </div>
