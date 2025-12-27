@@ -1,26 +1,28 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { PerspectiveCamera, Environment, Text, Sparkles, Stars, Instance, Instances, Billboard } from '@react-three/drei';
+import { PerspectiveCamera, Environment, Text, Sparkles, Billboard, Instance, Instances } from '@react-three/drei';
 import * as THREE from 'three';
-import { GameSchema, Player, LightColor, GAME_DEFAULTS, Obstacle } from '../types';
+import { GameSchema, Player, LightColor, Obstacle } from '../types';
+import { Howl, Howler } from 'howler';
 
 interface SceneProps {
   gameState: GameSchema;
   playerId: string;
   onMove: (dx: number, dz: number) => void;
   controlsRef: React.MutableRefObject<{ up: boolean; down: boolean; left: boolean; right: boolean }>;
-  onLaser: () => void;
 }
+
+const laserSound = new Howl({ src: ['https://assets.mixkit.co/active_storage/sfx/1666/1666-preview.mp3'], volume: 0.4 });
 
 const Forest = ({ fieldLength, fieldWidth }: { fieldLength: number, fieldWidth: number }) => {
     const trees = useMemo(() => {
         const temp = [];
-        const treeCount = Math.floor(fieldLength * 1.5);
+        const treeCount = Math.floor(fieldLength * 0.8); // Reduced count for performance
         for (let i = 0; i < treeCount; i++) {
             const isLeft = Math.random() > 0.5;
-            const xOffset = (fieldWidth / 2) + 5 + Math.random() * 40;
+            const xOffset = (fieldWidth / 2) + 5 + Math.random() * 30;
             const x = isLeft ? -xOffset : xOffset;
-            const z = Math.random() * (fieldLength + 40) - 20;
+            const z = Math.random() * (fieldLength + 20) - 10;
             const scale = 0.8 + Math.random() * 1.5;
             temp.push({ position: [x, 0, z], scale });
         }
@@ -29,8 +31,8 @@ const Forest = ({ fieldLength, fieldWidth }: { fieldLength: number, fieldWidth: 
 
     return (
         <Instances range={trees.length}>
-            <coneGeometry args={[1.5, 6, 8]} />
-            <meshStandardMaterial color="#14532d" roughness={0.8} />
+            <coneGeometry args={[1.5, 6, 6]} /> {/* Reduced segments */}
+            <meshStandardMaterial color="#14532d" roughness={1} />
             {trees.map((data, i) => (
                 <group key={i} position={data.position as [number, number, number]} scale={[data.scale, data.scale, data.scale]}>
                     <Instance position={[0, 3, 0]} />
@@ -44,7 +46,7 @@ const Forest = ({ fieldLength, fieldWidth }: { fieldLength: number, fieldWidth: 
     );
 };
 
-const LaserManager = ({ players, cannonZ, onLaser }: { players: Record<string, Player>, cannonZ: number, onLaser: () => void }) => {
+const LaserManager = ({ players, cannonZ }: { players: Record<string, Player>, cannonZ: number }) => {
     const [lasers, setLasers] = useState<{ id: string, target: THREE.Vector3 }[]>([]);
     const eliminatedIds = useRef<Set<string>>(new Set());
 
@@ -63,7 +65,9 @@ const LaserManager = ({ players, cannonZ, onLaser }: { players: Record<string, P
         });
 
         if (hasNewEliminations) {
-            onLaser(); // Trigger sound via prop safely
+            if (Howler.ctx && Howler.ctx.state === 'running') {
+               laserSound.play();
+            }
             setLasers(prev => [...prev, ...newLasers]);
         }
     });
@@ -92,7 +96,7 @@ const LaserManager = ({ players, cannonZ, onLaser }: { players: Record<string, P
                 orientation.multiply(new THREE.Matrix4().makeRotationX(Math.PI/2));
                 return (
                     <mesh key={l.id} position={mid} quaternion={new THREE.Quaternion().setFromRotationMatrix(orientation)}>
-                        <cylinderGeometry args={[0.1, 0.1, len, 8]} />
+                        <cylinderGeometry args={[0.1, 0.1, len, 6]} />
                         <meshBasicMaterial color="red" toneMapped={false} />
                     </mesh>
                 )
@@ -121,7 +125,7 @@ const ObstacleMesh: React.FC<{ obstacle: Obstacle }> = ({ obstacle }) => {
         return (
             <group ref={meshRef} position={[obstacle.x, obstacle.radius, obstacle.z]}>
                 <mesh castShadow receiveShadow>
-                    <dodecahedronGeometry args={[obstacle.radius, 1]} />
+                    <dodecahedronGeometry args={[obstacle.radius, 1]} /> {/* Lower detail */}
                     <meshStandardMaterial color="#57534e" roughness={0.9} />
                 </mesh>
             </group>
@@ -131,8 +135,8 @@ const ObstacleMesh: React.FC<{ obstacle: Obstacle }> = ({ obstacle }) => {
     return (
         <group ref={meshRef} position={[obstacle.x, 0.2, obstacle.z]}>
             <mesh castShadow receiveShadow>
-                <cylinderGeometry args={[obstacle.radius, obstacle.radius, 0.3, 32]} />
-                <meshStandardMaterial color="#999" metalness={0.9} roughness={0.2} />
+                <cylinderGeometry args={[obstacle.radius, obstacle.radius, 0.3, 16]} />
+                <meshStandardMaterial color="#999" metalness={0.8} roughness={0.4} />
             </mesh>
             <mesh><boxGeometry args={[obstacle.radius * 2.3, 0.4, 0.4]} /><meshStandardMaterial color="#ef4444" /></mesh>
             <mesh rotation={[0, Math.PI/2, 0]}><boxGeometry args={[obstacle.radius * 2.3, 0.4, 0.4]} /><meshStandardMaterial color="#ef4444" /></mesh>
@@ -145,19 +149,16 @@ const PlayerMesh: React.FC<{ player: Player; isMe: boolean }> = ({ player, isMe 
   
   useFrame((state, delta) => {
     if (meshRef.current) {
-      // Smooth movement
       meshRef.current.position.z = THREE.MathUtils.lerp(meshRef.current.position.z, player.z, 0.2);
       meshRef.current.position.x = THREE.MathUtils.lerp(meshRef.current.position.x, player.x, 0.2);
       
       if (player.isEliminated) {
-        // Fall down
         meshRef.current.rotation.x = THREE.MathUtils.lerp(meshRef.current.rotation.x, -Math.PI / 2, 0.1);
         meshRef.current.position.y = 0.2; 
       } else {
-         // Stand up and run animation
          meshRef.current.position.y = 0; 
-         meshRef.current.rotation.x = 0; // FIX: Ensure rotation is reset
-         meshRef.current.rotation.z = Math.sin(state.clock.elapsedTime * 15) * 0.05; // Walking wobble
+         meshRef.current.rotation.x = 0;
+         meshRef.current.rotation.z = Math.sin(state.clock.elapsedTime * 15) * 0.05;
       }
     }
   });
@@ -168,12 +169,12 @@ const PlayerMesh: React.FC<{ player: Player; isMe: boolean }> = ({ player, isMe 
         <mesh position={[-0.25, 0.4, 0]} castShadow><boxGeometry args={[0.4, 0.8, 0.4]} /><meshStandardMaterial color="#222" /></mesh>
         <mesh position={[0.25, 0.4, 0]} castShadow><boxGeometry args={[0.4, 0.8, 0.4]} /><meshStandardMaterial color="#222" /></mesh>
         <mesh position={[0, 1.3, 0]} castShadow><boxGeometry args={[0.9, 1, 0.5]} /><meshStandardMaterial color={player.color} /></mesh>
-        <mesh position={[0, 2.1, 0]} castShadow><cylinderGeometry args={[0.25, 0.25, 0.6, 16]} /><meshStandardMaterial color="#facc15" /></mesh>
+        <mesh position={[0, 2.1, 0]} castShadow><cylinderGeometry args={[0.25, 0.25, 0.6, 12]} /><meshStandardMaterial color="#facc15" /></mesh>
       </group>
       
       {isMe && !player.isEliminated && (
           <mesh position={[0, 0.1, 0]} rotation={[-Math.PI/2, 0, 0]}>
-               <ringGeometry args={[0.6, 0.8, 32]} />
+               <ringGeometry args={[0.6, 0.8, 24]} />
                <meshBasicMaterial color="#fbbf24" opacity={0.6} transparent />
           </mesh>
       )}
@@ -194,7 +195,7 @@ const TrafficLight = ({ light, timeRemaining, z }: { light: LightColor, timeRema
     return (
         <group position={[0, 8, z]}>
             <mesh position={[-3, 0, 0]}>
-                <sphereGeometry args={[1.5, 32, 32]} />
+                <sphereGeometry args={[1.5, 16, 16]} />
                 <meshStandardMaterial 
                     color={!isGreen ? "#ef4444" : "#450a0a"} 
                     emissive={!isGreen ? "#ef4444" : "#000000"}
@@ -203,7 +204,7 @@ const TrafficLight = ({ light, timeRemaining, z }: { light: LightColor, timeRema
                 />
             </mesh>
             <mesh position={[3, 0, 0]}>
-                <sphereGeometry args={[1.5, 32, 32]} />
+                <sphereGeometry args={[1.5, 16, 16]} />
                 <meshStandardMaterial 
                     color={isGreen ? "#22c55e" : "#052e16"}
                     emissive={isGreen ? "#22c55e" : "#0000000"}
@@ -230,7 +231,7 @@ const TrafficLight = ({ light, timeRemaining, z }: { light: LightColor, timeRema
     )
 }
 
-const GameContent = ({ gameState, playerId, onMove, controlsRef, onLaser }: SceneProps) => {
+const GameContent = ({ gameState, playerId, onMove, controlsRef }: SceneProps) => {
     const keysPressed = useRef<Set<string>>(new Set());
     const { size, camera } = useThree();
 
@@ -241,7 +242,7 @@ const GameContent = ({ gameState, playerId, onMove, controlsRef, onLaser }: Scen
         const isPortrait = size.height > size.width;
         const perspectiveCamera = camera as THREE.PerspectiveCamera;
         if (perspectiveCamera.isPerspectiveCamera) {
-            perspectiveCamera.fov = isPortrait ? 85 : 60;
+            perspectiveCamera.fov = isPortrait ? 75 : 60;
             perspectiveCamera.updateProjectionMatrix();
         }
     }, [size, camera]);
@@ -261,19 +262,17 @@ const GameContent = ({ gameState, playerId, onMove, controlsRef, onLaser }: Scen
         const MyPlayer = gameState.players[playerId];
         if (!MyPlayer) return;
 
-        // Camera Follow
         if (!MyPlayer.isEliminated && !MyPlayer.hasFinished) {
             const isPortrait = size.height > size.width;
-            const camDist = isPortrait ? 18 : 18; 
-            const camHeight = isPortrait ? 12 : 15;
-            const lookAtOffset = isPortrait ? 8 : 20;
+            const camDist = isPortrait ? 20 : 18; 
+            const camHeight = isPortrait ? 14 : 15;
+            const lookAtOffset = isPortrait ? 5 : 20;
 
             const targetPos = new THREE.Vector3(0, camHeight, MyPlayer.z - camDist);
             state.camera.position.lerp(targetPos, 0.1);
             state.camera.lookAt(0, 0, MyPlayer.z + lookAtOffset);
         }
 
-        // Keyboard Movement
         if (!MyPlayer.isEliminated && !MyPlayer.hasFinished) {
             let dx = 0; let dz = 0;
             if (keysPressed.current.has('ArrowUp') || keysPressed.current.has('KeyW')) dz = 1;
@@ -286,21 +285,21 @@ const GameContent = ({ gameState, playerId, onMove, controlsRef, onLaser }: Scen
 
     return (
         <>
-            <ambientLight intensity={0.8} /> 
-            <directionalLight position={[10, 30, 5]} intensity={1.5} castShadow />
-            <Environment preset="night" /> 
-            <fog attach="fog" args={['#1e1b4b', 10, 100]} />
+            <ambientLight intensity={0.7} /> 
+            <directionalLight position={[10, 30, 5]} intensity={1.2} />
+            <fog attach="fog" args={['#1e1b4b', 10, 90]} />
 
-            <Sparkles count={500} scale={[fieldWidth + 20, 20, fieldLength]} size={2} speed={0.4} opacity={0.5} color="#fbbf24" />
+            {/* drastically reduced particle count for iOS stability */}
+            <Sparkles count={150} scale={[fieldWidth + 20, 20, fieldLength]} size={2} speed={0.4} opacity={0.5} color="#fbbf24" />
 
-            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 50]} receiveShadow>
-                <planeGeometry args={[fieldWidth + 80, 400]} />
-                <meshStandardMaterial color="#1c1917" roughness={0.9} />
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 50]}>
+                <planeGeometry args={[fieldWidth + 60, 400]} />
+                <meshStandardMaterial color="#1c1917" />
             </mesh>
 
             <Forest fieldLength={fieldLength} fieldWidth={fieldWidth} />
 
-            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, fieldLength]} receiveShadow>
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, fieldLength]}>
                 <planeGeometry args={[fieldWidth, 2]} />
                 <meshStandardMaterial color="#facc15" emissive="#facc15" emissiveIntensity={0.5} />
             </mesh>
@@ -309,8 +308,7 @@ const GameContent = ({ gameState, playerId, onMove, controlsRef, onLaser }: Scen
             </Text>
             
             <TrafficLight light={gameState.light} timeRemaining={gameState.timeRemaining} z={fieldLength + 5} />
-
-            <LaserManager players={gameState.players} cannonZ={fieldLength + 5} onLaser={onLaser} />
+            <LaserManager players={gameState.players} cannonZ={fieldLength + 5} />
 
             {gameState.obstacles.map(obs => (
                 <ObstacleMesh key={obs.id} obstacle={obs} />
@@ -326,19 +324,16 @@ const GameContent = ({ gameState, playerId, onMove, controlsRef, onLaser }: Scen
 export const GameScene = (props: SceneProps) => {
     return (
         <div className="w-full h-full">
-            {/* CRITICAL FIXES FOR TELEGRAM IOS WEBVIEW:
-                1. dpr={1} forces low resolution to save memory (prevent crash)
-                2. shadows={false} disables shadow maps (huge memory saving)
-                3. powerPreference="default" avoids asking for high-performance GPU which might be blocked
-            */}
             <Canvas 
                 shadows={false} 
                 camera={{ fov: 60, position: [0, 8, -10] }} 
-                dpr={1} 
+                dpr={1} // CRITICAL: Force 1x pixel ratio. iOS Retina (3x) will crash memory otherwise.
                 gl={{ 
                     antialias: false, 
                     powerPreference: "default",
-                    preserveDrawingBuffer: true
+                    alpha: false, // Disabling alpha buffer saves memory
+                    stencil: false,
+                    depth: true
                 }}
             >
                 <GameContent {...props} />
