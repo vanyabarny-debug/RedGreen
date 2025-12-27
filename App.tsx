@@ -53,8 +53,7 @@ function App() {
       shot: new Howl({ src: ['https://assets.mixkit.co/active_storage/sfx/2759/2759-preview.mp3'], volume: 0.4 }),
       win: new Howl({ src: ['https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3'], volume: 0.8 }), 
       lose: new Howl({ src: ['https://assets.mixkit.co/active_storage/sfx/2042/2042-preview.mp3'], volume: 0.8 }),
-      cash: new Howl({ src: ['https://assets.mixkit.co/active_storage/sfx/2003/2003-preview.mp3'], volume: 1.0 }),
-      laser: new Howl({ src: ['https://assets.mixkit.co/active_storage/sfx/1666/1666-preview.mp3'], volume: 0.4 })
+      cash: new Howl({ src: ['https://assets.mixkit.co/active_storage/sfx/2003/2003-preview.mp3'], volume: 1.0 })
     };
     setAudioInitialized(true);
   }, []);
@@ -63,15 +62,6 @@ function App() {
       if (!soundsRef.current) return;
       const sound = soundsRef.current[key];
       if (sound && !sound.playing()) {
-          sound.play();
-      }
-  };
-
-  const playSoundForce = (key: string) => {
-      if (!soundsRef.current) return;
-      const sound = soundsRef.current[key];
-      if (sound) {
-          sound.stop();
           sound.play();
       }
   };
@@ -247,7 +237,6 @@ function App() {
              serverInstance.playerMove(MY_PLAYER_ID, x, z);
         }} 
         controlsRef={controlsRef}
-        onLaser={() => playSoundForce('laser')}
       />
 
       <UI 
