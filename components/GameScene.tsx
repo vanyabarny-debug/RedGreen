@@ -12,8 +12,6 @@ interface SceneProps {
   controlsRef: React.MutableRefObject<{ up: boolean; down: boolean; left: boolean; right: boolean }>;
 }
 
-const laserSound = new Howl({ src: ['https://assets.mixkit.co/active_storage/sfx/1666/1666-preview.mp3'], volume: 0.4 });
-
 const Forest = ({ fieldLength, fieldWidth }: { fieldLength: number, fieldWidth: number }) => {
     const trees = useMemo(() => {
         const temp = [];
@@ -49,6 +47,12 @@ const Forest = ({ fieldLength, fieldWidth }: { fieldLength: number, fieldWidth: 
 const LaserManager = ({ players, cannonZ }: { players: Record<string, Player>, cannonZ: number }) => {
     const [lasers, setLasers] = useState<{ id: string, target: THREE.Vector3 }[]>([]);
     const eliminatedIds = useRef<Set<string>>(new Set());
+    
+    // Lazy initialization of sound to avoid AudioContext errors during build/load
+    const laserSoundRef = useRef<Howl | null>(null);
+    useEffect(() => {
+        laserSoundRef.current = new Howl({ src: ['https://assets.mixkit.co/active_storage/sfx/1666/1666-preview.mp3'], volume: 0.4 });
+    }, []);
 
     useFrame(() => {
         const newLasers: { id: string, target: THREE.Vector3 }[] = [];
@@ -65,8 +69,9 @@ const LaserManager = ({ players, cannonZ }: { players: Record<string, Player>, c
         });
 
         if (hasNewEliminations) {
-            if (Howler.ctx && Howler.ctx.state === 'running') {
-               laserSound.play();
+            // Check context state before playing
+            if (Howler.ctx && Howler.ctx.state === 'running' && laserSoundRef.current) {
+               laserSoundRef.current.play();
             }
             setLasers(prev => [...prev, ...newLasers]);
         }
